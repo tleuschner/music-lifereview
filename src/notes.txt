@@ -1,0 +1,12 @@
+- Meine Top 20 Songs nach Anzahl abgespielt
+- Meine Top 20 Songs nach Wiedergabezeit
+- Meine Top 20 übersprungenen Songs
+- Top 20 Künstler nach Anzahl Songs
+- Top 20 Künstler nach Wiedergabezeit
+- Spotify Abspielzeit pro Monat und Jahr
+- Wie viele einzigartige Songs
+- Wie viele neue Songs pro Jahr
+- Spotify Nutzung nach Plattform
+- Spotify Nutzung nach Land
+
+- Verlauf der Wiedergabezeit pro monat der top 5 Künstler

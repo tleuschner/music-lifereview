@@ -20,6 +20,12 @@ import type {
   TrackIntentRow,
   PersonalityInputsRow,
   ShuffleSerendipityRow,
+  IntroTestRow,
+  ArtistDiscoveryRow,
+  WeekdayWeekendRow,
+  AlbumListenerRow,
+  SkipGraveyardRow,
+  SeasonalArtistRow,
 } from '../../../domain/port/outbound/StreamEntryRepository.js';
 
 export class PostgresStreamEntryRepository implements StreamEntryRepository {
@@ -38,6 +44,10 @@ export class PostgresStreamEntryRepository implements StreamEntryRepository {
           skip_count: b.skipCount,
           deliberate_count: b.deliberateCount,
           served_count: b.servedCount,
+          weekday_play_count: b.weekdayPlayCount,
+          weekend_play_count: b.weekendPlayCount,
+          weekday_skip_count: b.weekdaySkipCount,
+          weekend_skip_count: b.weekendSkipCount,
         }));
         await trx('monthly_artist_stats').insert(batch);
       }
@@ -59,6 +69,9 @@ export class PostgresStreamEntryRepository implements StreamEntryRepository {
           shuffle_trackdone_count: b.shuffleTrackdoneCount,
           deliberate_count: b.deliberateCount,
           served_count: b.servedCount,
+          short_play_count: b.shortPlayCount,
+          trackdone_count: b.trackdoneCount,
+          fwd_skip_count: b.fwdSkipCount,
         }));
         await trx('monthly_track_stats').insert(batch);
       }
@@ -950,6 +963,401 @@ export class PostgresStreamEntryRepository implements StreamEntryRepository {
       shufflePlays: Number(r.shuffle_plays),
       totalPlays: Number(r.total_plays),
       completionRate: Number(r.completion_rate),
+    }));
+  }
+
+  async getIntroTestTracks(sessionId: string, limit: number): Promise<IntroTestRow[]> {
+    const sql = `
+      WITH first_completion AS (
+        -- The earliest month where you actually finished the track
+        SELECT
+          track_name,
+          artist_name,
+          MIN(month) AS first_completion_month
+        FROM monthly_track_stats
+        WHERE session_id = ?
+          AND trackdone_count > 0
+        GROUP BY track_name, artist_name
+      ),
+      pre_bails AS (
+        -- Short plays that happened in months BEFORE the first completion
+        SELECT
+          t.track_name,
+          t.artist_name,
+          SUM(t.short_play_count)::integer AS pre_completion_bails
+        FROM monthly_track_stats t
+        JOIN first_completion fc
+          ON t.track_name = fc.track_name
+         AND t.artist_name = fc.artist_name
+        WHERE t.session_id = ?
+          AND t.month < fc.first_completion_month
+        GROUP BY t.track_name, t.artist_name
+      ),
+      totals AS (
+        SELECT
+          track_name,
+          artist_name,
+          SUM(play_count)::integer      AS total_plays,
+          SUM(trackdone_count)::integer AS completion_count
+        FROM monthly_track_stats
+        WHERE session_id = ?
+        GROUP BY track_name, artist_name
+      )
+      SELECT
+        p.track_name,
+        p.artist_name,
+        t.total_plays,
+        p.pre_completion_bails AS short_play_count,
+        t.completion_count
+      FROM pre_bails p
+      JOIN totals t ON t.track_name = p.track_name AND t.artist_name = p.artist_name
+      WHERE p.pre_completion_bails >= 3
+      ORDER BY p.pre_completion_bails DESC, t.completion_count DESC
+      LIMIT ?
+    `;
+    const result = await this.db.raw(sql, [sessionId, sessionId, sessionId, limit]);
+    return result.rows.map((r: {
+      track_name: string;
+      artist_name: string;
+      total_plays: string;
+      short_play_count: string;
+      completion_count: string;
+    }) => ({
+      trackName: r.track_name,
+      artistName: r.artist_name,
+      totalPlays: Number(r.total_plays),
+      shortPlayCount: Number(r.short_play_count),
+      completionCount: Number(r.completion_count),
+    }));
+  }
+
+  async getArtistDiscovery(sessionId: string, filters: StatsFilter): Promise<ArtistDiscoveryRow[]> {
+    const sql = `
+      WITH top AS (
+        SELECT
+          artist_name,
+          SUM(ms_played) AS total_ms
+        FROM monthly_artist_stats
+        WHERE session_id = ?
+          ${filters.from ? "AND month >= date_trunc('month', ?::date)" : ''}
+          ${filters.to   ? "AND month <= date_trunc('month', ?::date)" : ''}
+        GROUP BY artist_name
+        ORDER BY total_ms DESC
+        LIMIT 50
+      )
+      SELECT
+        top.artist_name,
+        EXTRACT(YEAR FROM MIN(a.month))::integer AS discovery_year,
+        top.total_ms::bigint
+      FROM top
+      JOIN monthly_artist_stats a ON a.session_id = ? AND a.artist_name = top.artist_name
+      GROUP BY top.artist_name, top.total_ms
+      ORDER BY top.total_ms DESC
+    `;
+
+    const bindings: unknown[] = [sessionId];
+    if (filters.from) bindings.push(filters.from);
+    if (filters.to) bindings.push(filters.to);
+    bindings.push(sessionId);
+
+    const result = await this.db.raw(sql, bindings);
+    return result.rows.map((r: { artist_name: string; discovery_year: number; total_ms: string }) => ({
+      artistName: r.artist_name,
+      discoveryYear: Number(r.discovery_year),
+      totalMs: Number(r.total_ms),
+    }));
+  }
+
+  async getWeekdayWeekend(sessionId: string, filters: StatsFilter): Promise<WeekdayWeekendRow> {
+    // --- Hours by weekday/weekend from monthly_heatmap ---
+    const hoursSql = `
+      SELECT
+        CASE WHEN day_of_week IN (0, 6) THEN 'weekend' ELSE 'weekday' END AS day_type,
+        SUM(ms_played)::bigint AS total_ms
+      FROM monthly_heatmap
+      WHERE session_id = ?
+        ${filters.from ? "AND month >= date_trunc('month', ?::date)" : ''}
+        ${filters.to   ? "AND month <= date_trunc('month', ?::date)" : ''}
+      GROUP BY day_type
+    `;
+    const hoursBindings: unknown[] = [sessionId];
+    if (filters.from) hoursBindings.push(filters.from);
+    if (filters.to) hoursBindings.push(filters.to);
+    const hoursResult = await this.db.raw(hoursSql, hoursBindings);
+    const hoursMap = new Map<string, number>();
+    for (const r of hoursResult.rows as Array<{ day_type: string; total_ms: string }>) {
+      hoursMap.set(r.day_type, Number(r.total_ms));
+    }
+
+    // --- Avg session length by weekday/weekend from monthly_stamina ---
+    const staminaSql = `
+      SELECT
+        CASE WHEN day_of_week IN (0, 6) THEN 'weekend' ELSE 'weekday' END AS day_type,
+        SUM(total_chain_length)::integer AS total_chain,
+        SUM(chain_count)::integer        AS chain_count
+      FROM monthly_stamina
+      WHERE session_id = ?
+        ${filters.from ? "AND month >= date_trunc('month', ?::date)" : ''}
+        ${filters.to   ? "AND month <= date_trunc('month', ?::date)" : ''}
+      GROUP BY day_type
+    `;
+    const staminaBindings: unknown[] = [sessionId];
+    if (filters.from) staminaBindings.push(filters.from);
+    if (filters.to) staminaBindings.push(filters.to);
+    const staminaResult = await this.db.raw(staminaSql, staminaBindings);
+    const staminaMap = new Map<string, { totalChain: number; chainCount: number }>();
+    for (const r of staminaResult.rows as Array<{ day_type: string; total_chain: string; chain_count: string }>) {
+      staminaMap.set(r.day_type, { totalChain: Number(r.total_chain), chainCount: Number(r.chain_count) });
+    }
+
+    // --- Skip rate + top artists by weekday/weekend from monthly_artist_stats ---
+    const artistSql = `
+      SELECT
+        artist_name,
+        SUM(weekday_play_count)::integer AS weekday_plays,
+        SUM(weekend_play_count)::integer AS weekend_plays,
+        SUM(weekday_skip_count)::integer AS weekday_skips,
+        SUM(weekend_skip_count)::integer AS weekend_skips
+      FROM monthly_artist_stats
+      WHERE session_id = ?
+        ${filters.from ? "AND month >= date_trunc('month', ?::date)" : ''}
+        ${filters.to   ? "AND month <= date_trunc('month', ?::date)" : ''}
+      GROUP BY artist_name
+    `;
+    const artistBindings: unknown[] = [sessionId];
+    if (filters.from) artistBindings.push(filters.from);
+    if (filters.to) artistBindings.push(filters.to);
+    const artistResult = await this.db.raw(artistSql, artistBindings);
+
+    let weekdayTotalPlays = 0;
+    let weekdayTotalSkips = 0;
+    let weekendTotalPlays = 0;
+    let weekendTotalSkips = 0;
+    const weekdayArtists: Array<{ name: string; playCount: number }> = [];
+    const weekendArtists: Array<{ name: string; playCount: number }> = [];
+
+    for (const r of artistResult.rows as Array<{
+      artist_name: string;
+      weekday_plays: string;
+      weekend_plays: string;
+      weekday_skips: string;
+      weekend_skips: string;
+    }>) {
+      const wp = Number(r.weekday_plays);
+      const wep = Number(r.weekend_plays);
+      weekdayTotalPlays += wp;
+      weekendTotalPlays += wep;
+      weekdayTotalSkips += Number(r.weekday_skips);
+      weekendTotalSkips += Number(r.weekend_skips);
+      if (wp > 0) weekdayArtists.push({ name: r.artist_name, playCount: wp });
+      if (wep > 0) weekendArtists.push({ name: r.artist_name, playCount: wep });
+    }
+
+    weekdayArtists.sort((a, b) => b.playCount - a.playCount);
+    weekendArtists.sort((a, b) => b.playCount - a.playCount);
+
+    const weekdayStamina = staminaMap.get('weekday');
+    const weekendStamina = staminaMap.get('weekend');
+
+    return {
+      weekday: {
+        totalMs: hoursMap.get('weekday') ?? 0,
+        avgSessionLength: weekdayStamina && weekdayStamina.chainCount > 0
+          ? Math.round(weekdayStamina.totalChain / weekdayStamina.chainCount * 10) / 10
+          : 0,
+        skipRate: weekdayTotalPlays > 0
+          ? Math.round(weekdayTotalSkips / weekdayTotalPlays * 1000) / 10
+          : 0,
+        topArtists: weekdayArtists.slice(0, 5),
+      },
+      weekend: {
+        totalMs: hoursMap.get('weekend') ?? 0,
+        avgSessionLength: weekendStamina && weekendStamina.chainCount > 0
+          ? Math.round(weekendStamina.totalChain / weekendStamina.chainCount * 10) / 10
+          : 0,
+        skipRate: weekendTotalPlays > 0
+          ? Math.round(weekendTotalSkips / weekendTotalPlays * 1000) / 10
+          : 0,
+        topArtists: weekendArtists.slice(0, 5),
+      },
+    };
+  }
+
+  async getAlbumListeners(sessionId: string, filters: StatsFilter): Promise<AlbumListenerRow[]> {
+    // Use track breadth as the signal instead of served/deliberate counts:
+    //   topTrackPct  — what % of an artist's total plays go to their single most-played track
+    //                  high = "just the hits" (one song dominates)
+    //   avgTracksPerAlbum — unique tracks played / distinct albums
+    //                  high = explores full albums
+    const sql = `
+      WITH per_track AS (
+        SELECT
+          artist_name,
+          track_name,
+          album_name,
+          SUM(play_count)::integer AS track_plays
+        FROM monthly_track_stats
+        WHERE session_id = ?
+          AND album_name IS NOT NULL
+          ${filters.from ? "AND month >= date_trunc('month', ?::date)" : ''}
+          ${filters.to   ? "AND month <= date_trunc('month', ?::date)" : ''}
+        GROUP BY artist_name, track_name, album_name
+      ),
+      ranked AS (
+        SELECT
+          *,
+          ROW_NUMBER() OVER (PARTITION BY artist_name ORDER BY track_plays DESC) AS rn
+        FROM per_track
+      )
+      SELECT
+        r.artist_name,
+        SUM(r.track_plays)::integer                                                                   AS total_plays,
+        COUNT(DISTINCT r.track_name)::integer                                                         AS unique_tracks,
+        COUNT(DISTINCT r.album_name)::integer                                                         AS album_count,
+        MAX(CASE WHEN r.rn = 1 THEN r.track_name END)                                               AS top_track_name,
+        ROUND(
+          MAX(CASE WHEN r.rn = 1 THEN r.track_plays END) * 100.0
+            / NULLIF(SUM(r.track_plays), 0),
+          1
+        )                                                                                             AS top_track_pct,
+        ROUND(
+          COUNT(DISTINCT r.track_name)::numeric / NULLIF(COUNT(DISTINCT r.album_name), 0),
+          1
+        )                                                                                             AS avg_tracks_per_album
+      FROM ranked r
+      GROUP BY r.artist_name
+      HAVING SUM(r.track_plays) >= 15
+      ORDER BY top_track_pct ASC
+      LIMIT 100
+    `;
+
+    const bindings: unknown[] = [sessionId];
+    if (filters.from) bindings.push(filters.from);
+    if (filters.to) bindings.push(filters.to);
+
+    const result = await this.db.raw(sql, bindings);
+    return result.rows.map((r: {
+      artist_name: string;
+      total_plays: string;
+      unique_tracks: string;
+      album_count: string;
+      top_track_name: string;
+      top_track_pct: string;
+      avg_tracks_per_album: string;
+    }) => ({
+      artistName: r.artist_name,
+      totalPlays: Number(r.total_plays),
+      uniqueTracks: Number(r.unique_tracks),
+      albumCount: Number(r.album_count),
+      topTrackName: r.top_track_name ?? '',
+      topTrackPct: Number(r.top_track_pct),
+      avgTracksPerAlbum: Number(r.avg_tracks_per_album),
+    }));
+  }
+
+  async getSkipGraveyard(sessionId: string, limit: number): Promise<SkipGraveyardRow[]> {
+    const sql = `
+      SELECT
+        track_name,
+        artist_name,
+        SUM(fwd_skip_count)::integer                                                        AS fwd_skip_count,
+        SUM(play_count)::integer                                                            AS total_plays,
+        ROUND(SUM(fwd_skip_count) * 100.0 / NULLIF(SUM(play_count), 0), 1)                AS fwd_skip_rate,
+        ROUND(SUM(ms_played)::numeric / NULLIF(SUM(fwd_skip_count), 0) / 1000.0, 1)       AS avg_listen_sec
+      FROM monthly_track_stats
+      WHERE session_id = ?
+        AND fwd_skip_count > 0
+      GROUP BY track_name, artist_name
+      HAVING SUM(fwd_skip_count) >= 3
+        AND SUM(back_count) = 0
+      ORDER BY SUM(fwd_skip_count) DESC
+      LIMIT ?
+    `;
+    const result = await this.db.raw(sql, [sessionId, limit]);
+    return result.rows.map((r: {
+      track_name: string;
+      artist_name: string;
+      fwd_skip_count: string;
+      total_plays: string;
+      fwd_skip_rate: string;
+      avg_listen_sec: string;
+    }) => ({
+      trackName: r.track_name,
+      artistName: r.artist_name,
+      fwdSkipCount: Number(r.fwd_skip_count),
+      totalPlays: Number(r.total_plays),
+      fwdSkipRate: Number(r.fwd_skip_rate),
+      avgListenSec: Number(r.avg_listen_sec),
+    }));
+  }
+
+  async getSeasonalArtists(sessionId: string): Promise<SeasonalArtistRow[]> {
+    const sql = `
+      WITH seasonal AS (
+        SELECT
+          artist_name,
+          CASE
+            WHEN EXTRACT(MONTH FROM month) IN (12, 1, 2) THEN 'Winter'
+            WHEN EXTRACT(MONTH FROM month) IN (3, 4, 5)  THEN 'Spring'
+            WHEN EXTRACT(MONTH FROM month) IN (6, 7, 8)  THEN 'Summer'
+            ELSE 'Fall'
+          END                                                      AS season,
+          SUM(play_count)::integer                                 AS season_plays,
+          COUNT(DISTINCT EXTRACT(YEAR FROM month))::integer        AS active_years
+        FROM monthly_artist_stats
+        WHERE session_id = ?
+        GROUP BY artist_name, season
+      ),
+      artist_totals AS (
+        SELECT
+          artist_name,
+          SUM(season_plays)    AS total_plays,
+          MAX(season_plays)    AS peak_plays
+        FROM seasonal
+        GROUP BY artist_name
+      ),
+      peak AS (
+        SELECT
+          s.artist_name,
+          s.season                                                            AS peak_season,
+          s.season_plays                                                      AS peak_plays,
+          s.active_years,
+          at.total_plays,
+          ROUND(s.season_plays * 100.0 / NULLIF(at.total_plays, 0), 1)      AS peak_pct
+        FROM seasonal s
+        JOIN artist_totals at ON s.artist_name = at.artist_name
+        WHERE s.season_plays = at.peak_plays
+      )
+      SELECT
+        artist_name,
+        peak_season,
+        peak_plays::integer,
+        total_plays::integer,
+        peak_pct,
+        active_years
+      FROM peak
+      WHERE peak_pct >= 60
+        AND total_plays >= 10
+        AND active_years >= 2
+      ORDER BY peak_pct DESC
+      LIMIT 20
+    `;
+
+    const result = await this.db.raw(sql, [sessionId]);
+    return result.rows.map((r: {
+      artist_name: string;
+      peak_season: string;
+      peak_plays: string;
+      total_plays: string;
+      peak_pct: string;
+      active_years: string;
+    }) => ({
+      artistName: r.artist_name,
+      season: r.peak_season,
+      peakPlays: Number(r.peak_plays),
+      totalPlays: Number(r.total_plays),
+      peakPct: Number(r.peak_pct),
+      activeYears: Number(r.active_years),
     }));
   }
 

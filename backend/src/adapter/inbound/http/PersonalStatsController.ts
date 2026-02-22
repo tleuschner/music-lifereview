@@ -51,6 +51,12 @@ export function createPersonalStatsController(useCase: QueryPersonalStats): Rout
   router.get('/:token/track-intent', handle((t, f) => useCase.getTrackIntent(t, f, f.limit ?? 50)));
   router.get('/:token/personality', handle((t) => useCase.getPersonalityInputs(t)));
   router.get('/:token/shuffle-serendipity', handle((t, f) => useCase.getShuffleSerendipity(t, f.limit ?? 25)));
+  router.get('/:token/intro-test', handle((t, f) => useCase.getIntroTestTracks(t, f.limit ?? 50)));
+  router.get('/:token/artist-discovery', handle((t, f) => useCase.getArtistDiscovery(t, f)));
+  router.get('/:token/weekday-weekend', handle((t, f) => useCase.getWeekdayWeekend(t, f)));
+  router.get('/:token/album-listeners', handle((t, f) => useCase.getAlbumListeners(t, f)));
+  router.get('/:token/skip-graveyard', handle((t, f) => useCase.getSkipGraveyard(t, f.limit ?? 50)));
+  router.get('/:token/seasonal-artists', handle((t) => useCase.getSeasonalArtists(t)));
 
   router.post('/:token/personality/record', async (req, res, next) => {
     try {

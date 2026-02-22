@@ -156,6 +156,60 @@ export interface ShuffleSerendipityEntry {
   totalPlays: number;
 }
 
+export interface IntroTestEntry {
+  name: string;
+  artistName: string;
+  totalPlays: number;
+  shortPlayCount: number;    // plays where ms_played < 30s
+  completionCount: number;   // plays where reason_end = 'trackdone'
+}
+
+export interface ArtistDiscoveryEntry {
+  name: string;
+  discoveryYear: number;   // year of first play (all-time)
+  totalHours: number;
+}
+
+export interface WeekdayWeekendSlice {
+  totalHours: number;
+  avgSessionLength: number;   // avg consecutive-trackdone chain length (songs per session)
+  skipRate: number;            // 0–100 percentage
+  topArtists: Array<{ name: string; playCount: number }>;
+}
+
+export interface WeekdayWeekendResponse {
+  weekday: WeekdayWeekendSlice;
+  weekend: WeekdayWeekendSlice;
+}
+
+export interface SkipGraveyardEntry {
+  name: string;
+  artistName: string;
+  fwdSkipCount: number;  // times forward-skipped (reason_end = fwdbtn)
+  totalPlays: number;
+  fwdSkipRate: number;   // fwdSkipCount / totalPlays × 100 (0–100)
+  avgListenSec: number;  // average seconds listened before being forward-skipped
+}
+
+export interface SeasonalArtistEntry {
+  name: string;
+  season: 'Winter' | 'Spring' | 'Summer' | 'Fall';
+  peakPlays: number;    // plays in peak season (across all years)
+  totalPlays: number;   // all-time plays
+  peakPct: number;      // peakPlays / totalPlays × 100
+  activeYears: number;  // distinct years where they had plays in their peak season
+}
+
+export interface AlbumListenerEntry {
+  name: string;
+  totalPlays: number;
+  uniqueTracks: number;        // distinct tracks ever played
+  albumCount: number;          // distinct albums played from
+  topTrackName: string;        // the single most-played track
+  topTrackPct: number;         // topTrack plays / totalPlays × 100 (0–100)
+  avgTracksPerAlbum: number;   // uniqueTracks / albumCount — depth of exploration
+}
+
 export interface PersonalityInputsResponse {
   /** Total ms_played per hour of day (index 0 = midnight, 23 = 11pm) */
   hourTotals: number[];

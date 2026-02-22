@@ -18,6 +18,12 @@ import type {
   TrackIntentEntry,
   PersonalityInputsResponse,
   ShuffleSerendipityEntry,
+  IntroTestEntry,
+  ArtistDiscoveryEntry,
+  WeekdayWeekendResponse,
+  AlbumListenerEntry,
+  SkipGraveyardEntry,
+  SeasonalArtistEntry,
 } from '@music-livereview/shared';
 
 export interface QueryPersonalStats {
@@ -42,4 +48,10 @@ export interface QueryPersonalStats {
   getPersonalityInputs(token: string): Promise<PersonalityInputsResponse | null>;
   recordPersonality(token: string, personalityId: string): Promise<boolean>;
   getShuffleSerendipity(token: string, limit: number): Promise<ShuffleSerendipityEntry[] | null>;
+  getIntroTestTracks(token: string, limit: number): Promise<IntroTestEntry[] | null>;
+  getArtistDiscovery(token: string, filters: StatsFilter): Promise<ArtistDiscoveryEntry[] | null>;
+  getWeekdayWeekend(token: string, filters: StatsFilter): Promise<WeekdayWeekendResponse | null>;
+  getAlbumListeners(token: string, filters: StatsFilter): Promise<AlbumListenerEntry[] | null>;
+  getSkipGraveyard(token: string, limit: number): Promise<SkipGraveyardEntry[] | null>;
+  getSeasonalArtists(token: string): Promise<SeasonalArtistEntry[] | null>;
 }

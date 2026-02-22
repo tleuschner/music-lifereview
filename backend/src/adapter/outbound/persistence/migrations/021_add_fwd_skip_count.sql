@@ -1,0 +1,1 @@
+ALTER TABLE monthly_track_stats ADD COLUMN IF NOT EXISTS fwd_skip_count INTEGER NOT NULL DEFAULT 0;

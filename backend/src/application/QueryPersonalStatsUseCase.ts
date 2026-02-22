@@ -19,29 +19,43 @@ import type {
   TrackIntentEntry,
   PersonalityInputsResponse,
   ShuffleSerendipityEntry,
+  IntroTestEntry,
+  ArtistDiscoveryEntry,
+  WeekdayWeekendResponse,
+  AlbumListenerEntry,
+  SkipGraveyardEntry,
+  SeasonalArtistEntry,
 } from '@music-livereview/shared';
 import type { QueryPersonalStats } from '../domain/port/inbound/QueryPersonalStats.js';
 import type { UploadSessionRepository } from '../domain/port/outbound/UploadSessionRepository.js';
 import type { StreamEntryRepository } from '../domain/port/outbound/StreamEntryRepository.js';
 
 export class QueryPersonalStatsUseCase implements QueryPersonalStats {
+  // Cache token → session ID for 60s to avoid a DB round-trip on every endpoint call
+  private readonly sessionIdCache = new Map<string, { id: string; expiresAt: number }>();
+
   constructor(
     private readonly sessionRepo: UploadSessionRepository,
     private readonly entryRepo: StreamEntryRepository,
   ) {}
 
   private async resolveSessionId(token: string): Promise<string | null> {
+    const cached = this.sessionIdCache.get(token);
+    if (cached && cached.expiresAt > Date.now()) return cached.id;
+
     const session = await this.sessionRepo.findByToken(token);
     if (!session || session.status !== 'completed') return null;
+
+    this.sessionIdCache.set(token, { id: session.id, expiresAt: Date.now() + 60_000 });
     return session.id;
   }
 
   async getOverview(token: string, _filters: StatsFilter): Promise<OverviewResponse | null> {
-    const session = await this.sessionRepo.findByToken(token);
-    if (!session || session.status !== 'completed') return null;
+    const sessionId = await this.resolveSessionId(token);
+    if (!sessionId) return null;
 
     // Read from pre-computed session_summaries — avoids full scan of stream_entries on every page load
-    const summary = await this.entryRepo.getSessionSummary(session.id);
+    const summary = await this.entryRepo.getSessionSummary(sessionId);
     if (!summary) return null;
     const totalHours = summary.totalMsPlayed / MS_PER_HOUR;
 
@@ -342,5 +356,93 @@ export class QueryPersonalStatsUseCase implements QueryPersonalStats {
       completionRate: r.completionRate,
       totalPlays: r.totalPlays,
     }));
+  }
+
+  async getIntroTestTracks(token: string, limit: number): Promise<IntroTestEntry[] | null> {
+    const sessionId = await this.resolveSessionId(token);
+    if (!sessionId) return null;
+
+    const rows = await this.entryRepo.getIntroTestTracks(sessionId, limit);
+    return rows.map(r => ({
+      name: r.trackName,
+      artistName: r.artistName,
+      totalPlays: r.totalPlays,
+      shortPlayCount: r.shortPlayCount,
+      completionCount: r.completionCount,
+    }));
+  }
+
+  async getArtistDiscovery(token: string, filters: StatsFilter): Promise<ArtistDiscoveryEntry[] | null> {
+    const sessionId = await this.resolveSessionId(token);
+    if (!sessionId) return null;
+
+    const rows = await this.entryRepo.getArtistDiscovery(sessionId, filters);
+    return rows.map(r => ({
+      name: r.artistName,
+      discoveryYear: r.discoveryYear,
+      totalHours: Math.round(r.totalMs / MS_PER_HOUR * 10) / 10,
+    }));
+  }
+
+  async getAlbumListeners(token: string, filters: StatsFilter): Promise<AlbumListenerEntry[] | null> {
+    const sessionId = await this.resolveSessionId(token);
+    if (!sessionId) return null;
+
+    const rows = await this.entryRepo.getAlbumListeners(sessionId, filters);
+    return rows.map(r => ({
+      name: r.artistName,
+      totalPlays: r.totalPlays,
+      uniqueTracks: r.uniqueTracks,
+      albumCount: r.albumCount,
+      topTrackName: r.topTrackName,
+      topTrackPct: r.topTrackPct,
+      avgTracksPerAlbum: r.avgTracksPerAlbum,
+    }));
+  }
+
+  async getSkipGraveyard(token: string, limit: number): Promise<SkipGraveyardEntry[] | null> {
+    const sessionId = await this.resolveSessionId(token);
+    if (!sessionId) return null;
+
+    const rows = await this.entryRepo.getSkipGraveyard(sessionId, limit);
+    return rows.map(r => ({
+      name: r.trackName,
+      artistName: r.artistName,
+      fwdSkipCount: r.fwdSkipCount,
+      totalPlays: r.totalPlays,
+      fwdSkipRate: r.fwdSkipRate,
+      avgListenSec: r.avgListenSec,
+    }));
+  }
+
+  async getSeasonalArtists(token: string): Promise<SeasonalArtistEntry[] | null> {
+    const sessionId = await this.resolveSessionId(token);
+    if (!sessionId) return null;
+
+    const rows = await this.entryRepo.getSeasonalArtists(sessionId);
+    return rows.map(r => ({
+      name: r.artistName,
+      season: r.season as SeasonalArtistEntry['season'],
+      peakPlays: r.peakPlays,
+      totalPlays: r.totalPlays,
+      peakPct: r.peakPct,
+      activeYears: r.activeYears,
+    }));
+  }
+
+  async getWeekdayWeekend(token: string, filters: StatsFilter): Promise<WeekdayWeekendResponse | null> {
+    const sessionId = await this.resolveSessionId(token);
+    if (!sessionId) return null;
+
+    const row = await this.entryRepo.getWeekdayWeekend(sessionId, filters);
+
+    const mapSlice = (s: typeof row.weekday) => ({
+      totalHours: Math.round(s.totalMs / MS_PER_HOUR * 10) / 10,
+      avgSessionLength: s.avgSessionLength,
+      skipRate: s.skipRate,
+      topArtists: s.topArtists,
+    });
+
+    return { weekday: mapSlice(row.weekday), weekend: mapSlice(row.weekend) };
   }
 }

@@ -24,6 +24,12 @@ import type {
   TrendingArtistEntry,
   StatsFilter,
   ShuffleSerendipityEntry,
+  IntroTestEntry,
+  ArtistDiscoveryEntry,
+  WeekdayWeekendResponse,
+  AlbumListenerEntry,
+  SkipGraveyardEntry,
+  SeasonalArtistEntry,
 } from '@music-livereview/shared';
 import { PII_FIELDS } from '@music-livereview/shared';
 
@@ -182,6 +188,36 @@ export async function getPersonalityInputs(token: string): Promise<PersonalityIn
 
 export async function getShuffleSerendipity(token: string, filters: StatsFilter = {}): Promise<ShuffleSerendipityEntry[]> {
   const { data } = await http.get(`/stats/${token}/shuffle-serendipity`, { params: filterParams(filters) });
+  return data;
+}
+
+export async function getIntroTestTracks(token: string, filters: StatsFilter = {}): Promise<IntroTestEntry[]> {
+  const { data } = await http.get(`/stats/${token}/intro-test`, { params: filterParams(filters) });
+  return data;
+}
+
+export async function getArtistDiscovery(token: string, filters: StatsFilter = {}): Promise<ArtistDiscoveryEntry[]> {
+  const { data } = await http.get(`/stats/${token}/artist-discovery`, { params: filterParams(filters) });
+  return data;
+}
+
+export async function getWeekdayWeekend(token: string, filters: StatsFilter = {}): Promise<WeekdayWeekendResponse> {
+  const { data } = await http.get(`/stats/${token}/weekday-weekend`, { params: filterParams(filters) });
+  return data;
+}
+
+export async function getAlbumListeners(token: string, filters: StatsFilter = {}): Promise<AlbumListenerEntry[]> {
+  const { data } = await http.get(`/stats/${token}/album-listeners`, { params: filterParams(filters) });
+  return data;
+}
+
+export async function getSkipGraveyard(token: string, filters: StatsFilter = {}): Promise<SkipGraveyardEntry[]> {
+  const { data } = await http.get(`/stats/${token}/skip-graveyard`, { params: filterParams(filters) });
+  return data;
+}
+
+export async function getSeasonalArtists(token: string): Promise<SeasonalArtistEntry[]> {
+  const { data } = await http.get(`/stats/${token}/seasonal-artists`);
   return data;
 }
 

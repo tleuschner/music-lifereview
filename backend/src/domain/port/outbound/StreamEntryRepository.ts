@@ -65,6 +65,10 @@ export interface MonthlyArtistBucket {
   skipCount: number;
   deliberateCount: number;
   servedCount: number;
+  weekdayPlayCount: number;
+  weekendPlayCount: number;
+  weekdaySkipCount: number;
+  weekendSkipCount: number;
 }
 
 export interface MonthlyTrackBucket {
@@ -81,6 +85,9 @@ export interface MonthlyTrackBucket {
   shuffleTrackdoneCount: number;
   deliberateCount: number;
   servedCount: number;
+  shortPlayCount: number;   // plays where ms_played < 30 000 ms
+  trackdoneCount: number;   // plays where reason_end = 'trackdone'
+  fwdSkipCount: number;     // plays where reason_end = 'fwdbtn'
 }
 
 export interface ShuffleSerendipityRow {
@@ -89,6 +96,32 @@ export interface ShuffleSerendipityRow {
   shufflePlays: number;
   completionRate: number;
   totalPlays: number;
+}
+
+export interface IntroTestRow {
+  trackName: string;
+  artistName: string;
+  totalPlays: number;
+  shortPlayCount: number;
+  completionCount: number;
+}
+
+export interface ArtistDiscoveryRow {
+  artistName: string;
+  discoveryYear: number;
+  totalMs: number;
+}
+
+export interface WeekdayWeekendSliceRow {
+  totalMs: number;
+  avgSessionLength: number;
+  skipRate: number;
+  topArtists: Array<{ name: string; playCount: number }>;
+}
+
+export interface WeekdayWeekendRow {
+  weekday: WeekdayWeekendSliceRow;
+  weekend: WeekdayWeekendSliceRow;
 }
 
 export interface BackButtonRow {
@@ -118,6 +151,34 @@ export interface MonthlyTotalBucket {
   podcastPlayCount: number;
   podcastMsPlayed: number;
   shuffleCount: number;
+}
+
+export interface SkipGraveyardRow {
+  trackName: string;
+  artistName: string;
+  fwdSkipCount: number;
+  totalPlays: number;
+  fwdSkipRate: number;
+  avgListenSec: number;
+}
+
+export interface SeasonalArtistRow {
+  artistName: string;
+  season: string;
+  peakPlays: number;
+  totalPlays: number;
+  peakPct: number;
+  activeYears: number;
+}
+
+export interface AlbumListenerRow {
+  artistName: string;
+  totalPlays: number;
+  uniqueTracks: number;
+  albumCount: number;
+  topTrackName: string;
+  topTrackPct: number;
+  avgTracksPerAlbum: number;
 }
 
 export interface PersonalityInputsRow {
@@ -210,6 +271,12 @@ export interface StreamEntryRepository {
   getTrackIntent(sessionId: string, filters: StatsFilter, limit: number): Promise<TrackIntentRow[]>;
   getPersonalityInputs(sessionId: string): Promise<PersonalityInputsRow>;
   getShuffleSerendipity(sessionId: string, limit: number): Promise<ShuffleSerendipityRow[]>;
+  getIntroTestTracks(sessionId: string, limit: number): Promise<IntroTestRow[]>;
+  getArtistDiscovery(sessionId: string, filters: StatsFilter): Promise<ArtistDiscoveryRow[]>;
+  getWeekdayWeekend(sessionId: string, filters: StatsFilter): Promise<WeekdayWeekendRow>;
+  getAlbumListeners(sessionId: string, filters: StatsFilter): Promise<AlbumListenerRow[]>;
+  getSkipGraveyard(sessionId: string, limit: number): Promise<SkipGraveyardRow[]>;
+  getSeasonalArtists(sessionId: string): Promise<SeasonalArtistRow[]>;
 
   upsertPersonalityRecord(sessionId: string, personalityId: string): Promise<void>;
   getPersonalityDistribution(): Promise<Array<{ personalityId: string; count: number }>>;

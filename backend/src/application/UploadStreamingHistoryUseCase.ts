@@ -98,8 +98,8 @@ export class UploadStreamingHistoryUseCase implements UploadStreamingHistory {
 
   private aggregateEntries(rawEntries: SpotifyStreamEntry[]): { summary: SessionSummary; aggregated: AggregatedIngestData } {
     // Accumulation maps
-    const artistMonthly = new Map<string, { playCount: number; msPlayed: number; skipCount: number; deliberateCount: number; servedCount: number }>();
-    const trackMonthly = new Map<string, { trackName: string; artistName: string; albumName: string | null; spotifyTrackUri: string | null; playCount: number; msPlayed: number; skipCount: number; backCount: number; shufflePlayCount: number; shuffleTrackdoneCount: number; deliberateCount: number; servedCount: number }>();
+    const artistMonthly = new Map<string, { playCount: number; msPlayed: number; skipCount: number; deliberateCount: number; servedCount: number; weekdayPlayCount: number; weekendPlayCount: number; weekdaySkipCount: number; weekendSkipCount: number }>();
+    const trackMonthly = new Map<string, { trackName: string; artistName: string; albumName: string | null; spotifyTrackUri: string | null; playCount: number; msPlayed: number; skipCount: number; backCount: number; shufflePlayCount: number; shuffleTrackdoneCount: number; deliberateCount: number; servedCount: number; shortPlayCount: number; trackdoneCount: number; fwdSkipCount: number }>();
     const heatmapMonthly = new Map<string, number>();
     const trackFirstPlayMap = new Map<string, Date>();
     const monthlyTotals = new Map<string, { playCount: number; msPlayed: number; podcastPlayCount: number; podcastMsPlayed: number; shuffleCount: number }>();
@@ -128,6 +128,9 @@ export class UploadStreamingHistoryUseCase implements UploadStreamingHistory {
       const isPodcast = !e.master_metadata_track_name && (e.episode_name != null || e.spotify_episode_uri != null);
       const isDeliberate = e.reason_start === 'clickrow' || e.reason_start === 'playbtn' || e.reason_start === 'backbtn';
       const isServed = e.reason_start === 'trackdone' || e.reason_start === 'fwdbtn';
+      const isShortPlay = e.ms_played < 30000;
+      const isTrackdone = e.reason_end === 'trackdone';
+      const isFwdSkip = e.reason_end === 'fwdbtn';
 
       // Summary
       totalEntries++;
@@ -139,6 +142,7 @@ export class UploadStreamingHistoryUseCase implements UploadStreamingHistory {
       if (!dateTo || ts > dateTo) dateTo = ts;
 
       // Artist monthly
+      const isWeekend = dow === 0 || dow === 6;
       if (e.master_metadata_album_artist_name) {
         const key = `${monthStr}|${e.master_metadata_album_artist_name}`;
         const existing = artistMonthly.get(key);
@@ -148,6 +152,8 @@ export class UploadStreamingHistoryUseCase implements UploadStreamingHistory {
           if (skipped) existing.skipCount++;
           if (isDeliberate) existing.deliberateCount++;
           if (isServed) existing.servedCount++;
+          if (isWeekend) { existing.weekendPlayCount++; if (skipped) existing.weekendSkipCount++; }
+          else { existing.weekdayPlayCount++; if (skipped) existing.weekdaySkipCount++; }
         } else {
           artistMonthly.set(key, {
             playCount: 1,
@@ -155,6 +161,10 @@ export class UploadStreamingHistoryUseCase implements UploadStreamingHistory {
             skipCount: skipped ? 1 : 0,
             deliberateCount: isDeliberate ? 1 : 0,
             servedCount: isServed ? 1 : 0,
+            weekdayPlayCount: isWeekend ? 0 : 1,
+            weekendPlayCount: isWeekend ? 1 : 0,
+            weekdaySkipCount: !isWeekend && skipped ? 1 : 0,
+            weekendSkipCount: isWeekend && skipped ? 1 : 0,
           });
         }
       }
@@ -172,6 +182,9 @@ export class UploadStreamingHistoryUseCase implements UploadStreamingHistory {
           if (isShuffleTrackdone) existing.shuffleTrackdoneCount++;
           if (isDeliberate) existing.deliberateCount++;
           if (isServed) existing.servedCount++;
+          if (isShortPlay) existing.shortPlayCount++;
+          if (isTrackdone) existing.trackdoneCount++;
+          if (isFwdSkip) existing.fwdSkipCount++;
         } else {
           trackMonthly.set(key, {
             trackName: e.master_metadata_track_name,
@@ -186,6 +199,9 @@ export class UploadStreamingHistoryUseCase implements UploadStreamingHistory {
             shuffleTrackdoneCount: isShuffleTrackdone ? 1 : 0,
             deliberateCount: isDeliberate ? 1 : 0,
             servedCount: isServed ? 1 : 0,
+            shortPlayCount: isShortPlay ? 1 : 0,
+            trackdoneCount: isTrackdone ? 1 : 0,
+            fwdSkipCount: isFwdSkip ? 1 : 0,
           });
         }
       }
@@ -266,6 +282,10 @@ export class UploadStreamingHistoryUseCase implements UploadStreamingHistory {
         skipCount: val.skipCount,
         deliberateCount: val.deliberateCount,
         servedCount: val.servedCount,
+        weekdayPlayCount: val.weekdayPlayCount,
+        weekendPlayCount: val.weekendPlayCount,
+        weekdaySkipCount: val.weekdaySkipCount,
+        weekendSkipCount: val.weekendSkipCount,
       });
     }
 

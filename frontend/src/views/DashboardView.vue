@@ -48,6 +48,9 @@
       <div v-if="loadingStates.sessionStamina" class="chart-container card"><LoadingSpinner /></div>
       <SessionStaminaChart v-else :data="sessionStamina" />
 
+      <div v-if="loadingStates.weekdayWeekend" class="chart-container card"><LoadingSpinner /></div>
+      <WeekdayWeekendChart v-else :data="weekdayWeekend" />
+
       <div v-if="loadingStates.artistTimeline" class="chart-container card"><LoadingSpinner /></div>
       <StackedArtistAreaChart v-else :data="artistTimeline" />
 
@@ -62,12 +65,17 @@
 
       <div v-if="loadingStates.trackCumulative" class="chart-container card"><LoadingSpinner /></div>
       <TrackRaceChart v-else :data="trackCumulative" />
+      <div ref="bmcSentinel" class="bmc-sentinel"></div>
+      <BuyMeACoffeePopup ref="bmcPopup" />
 
       <div v-if="loadingStates.artistLoyalty" class="chart-container card"><LoadingSpinner /></div>
       <ArtistLoyaltyChart v-else :data="artistLoyalty" />
 
       <div v-if="loadingStates.backButtonTracks" class="chart-container card"><LoadingSpinner /></div>
       <ReplayLeaderboard v-else :data="backButtonTracks" />
+
+      <div v-if="loadingStates.skipGraveyard" class="chart-container card"><LoadingSpinner /></div>
+      <SkipGraveyardChart v-else :data="skipGraveyard" />
 
       <div v-if="loadingStates.skippedTracks" class="chart-container card"><LoadingSpinner /></div>
       <SkippedTracksLeaderboard v-else :data="skippedTracks" />
@@ -84,14 +92,26 @@
       <div v-if="loadingStates.trackIntent" class="chart-container card"><LoadingSpinner /></div>
       <TrackIntentChart v-else :data="trackIntent" />
 
+      <div v-if="loadingStates.albumListeners" class="chart-container card"><LoadingSpinner /></div>
+      <AlbumListenerChart v-else :data="albumListeners" />
+
       <div v-if="loadingStates.shuffleSerendipity" class="chart-container card"><LoadingSpinner /></div>
       <ShuffleSerendipityChart v-else :data="shuffleSerendipity" />
+
+      <div v-if="loadingStates.introTestTracks" class="chart-container card"><LoadingSpinner /></div>
+      <IntroTestChart v-else :data="introTestTracks" />
+
+      <div v-if="loadingStates.artistDiscovery" class="chart-container card"><LoadingSpinner /></div>
+      <DiscoveryAgeMapChart v-else :data="artistDiscovery" />
+
+      <div v-if="loadingStates.seasonalArtists" class="chart-container card"><LoadingSpinner /></div>
+      <SeasonalLoyaltyChart v-else :data="seasonalArtists" />
     </template>
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted } from 'vue';
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
 import { useRoute } from 'vue-router';
 import { useStreamingData } from '../composables/useStreamingData';
 import { useFilters } from '../composables/useFilters';
@@ -110,6 +130,7 @@ import ArtistRaceChart from '../components/charts/ArtistRaceChart.vue';
 import StackedTrackAreaChart from '../components/charts/StackedTrackAreaChart.vue';
 import TrackRaceChart from '../components/charts/TrackRaceChart.vue';
 import ReplayLeaderboard from '../components/charts/ReplayLeaderboard.vue';
+import SkipGraveyardChart from '../components/charts/SkipGraveyardChart.vue';
 import SkippedTracksLeaderboard from '../components/charts/SkippedTracksLeaderboard.vue';
 import PodcastMusicChart from '../components/charts/PodcastMusicChart.vue';
 import ObsessionTimelineChart from '../components/charts/ObsessionTimelineChart.vue';
@@ -117,11 +138,21 @@ import SessionStaminaChart from '../components/charts/SessionStaminaChart.vue';
 import ArtistIntentChart from '../components/charts/ArtistIntentChart.vue';
 import TrackIntentChart from '../components/charts/TrackIntentChart.vue';
 import ShuffleSerendipityChart from '../components/charts/ShuffleSerendipityChart.vue';
+import IntroTestChart from '../components/charts/IntroTestChart.vue';
+import DiscoveryAgeMapChart from '../components/charts/DiscoveryAgeMapChart.vue';
 import PersonalityCard from '../components/charts/PersonalityCard.vue';
+import WeekdayWeekendChart from '../components/charts/WeekdayWeekendChart.vue';
+import AlbumListenerChart from '../components/charts/AlbumListenerChart.vue';
+import SeasonalLoyaltyChart from '../components/charts/SeasonalLoyaltyChart.vue';
+import BuyMeACoffeePopup from '../components/shared/BuyMeACoffeePopup.vue';
 
 const route = useRoute();
 const token = computed(() => route.params.token as string);
 const shareUrl = computed(() => `${window.location.origin}/results/${token.value}`);
+
+const bmcSentinel = ref<HTMLElement | null>(null);
+const bmcPopup = ref<{ show: () => void } | null>(null);
+let bmcObserver: IntersectionObserver | null = null;
 
 const { dateFrom, dateTo, sortBy, activeFilters, hasActiveFilters, resetFilters } = useFilters();
 
@@ -146,11 +177,34 @@ const {
   artistIntent,
   trackIntent,
   shuffleSerendipity,
+  introTestTracks,
+  artistDiscovery,
+  weekdayWeekend,
+  albumListeners,
+  skipGraveyard,
+  seasonalArtists,
   personalityInputs,
   fetchAll,
 } = useStreamingData(token, activeFilters);
 
 onMounted(() => fetchAll());
+
+watch(bmcSentinel, (el) => {
+  if (el && !bmcObserver) {
+    bmcObserver = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting) {
+          bmcPopup.value?.show();
+          bmcObserver?.disconnect();
+        }
+      },
+      { threshold: 0.1 }
+    );
+    bmcObserver.observe(el);
+  }
+});
+
+onUnmounted(() => bmcObserver?.disconnect());
 </script>
 
 <style scoped>
@@ -158,5 +212,10 @@ onMounted(() => fetchAll());
   display: flex;
   flex-direction: column;
   gap: 1.5rem;
+}
+
+.bmc-sentinel {
+  height: 0;
+  visibility: hidden;
 }
 </style>

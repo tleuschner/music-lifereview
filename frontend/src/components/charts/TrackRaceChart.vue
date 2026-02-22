@@ -2,8 +2,8 @@
   <div class="chart-container card">
     <div class="chart-header">
       <div>
-        <h3 class="section-title">All-Time Song Race</h3>
-        <p class="section-subtitle">Cumulative listening hours — see exactly when each song took over your life.</p>
+        <h3 class="section-title">All-Time Track Race</h3>
+        <p class="section-subtitle">Cumulative listening hours — see exactly when each track took over your life.</p>
       </div>
       <div v-if="chartData && selectedTracks.length > 0" class="controls">
         <span class="selection-count">{{ selectedTracks.length }} of {{ legendItems.length }} shown</span>

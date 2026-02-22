@@ -37,14 +37,38 @@ export function createPersonalStatsController(useCase: QueryPersonalStats): Rout
   router.get('/:token/timeline', handle((t, f) => useCase.getTimeline(t, f)));
   router.get('/:token/heatmap', handle((t, f) => useCase.getHeatmap(t, f)));
   router.get('/:token/top-artists-over-time', handle((t, f) => useCase.getTopArtistsOverTime(t, f.limit ?? DEFAULT_ARTIST_TIMELINE_LIMIT, f)));
+  router.get('/:token/top-tracks-over-time', handle((t, f) => useCase.getTopTracksOverTime(t, f.limit ?? DEFAULT_ARTIST_TIMELINE_LIMIT, f)));
   router.get('/:token/discovery', handle((t, f) => useCase.getDiscoveryRate(t, f)));
   router.get('/:token/skipped', handle((t, f) => useCase.getSkippedTracks(t, f.limit ?? 50)));
   router.get('/:token/artist-loyalty', handle((t, f) => useCase.getArtistLoyalty(t, f)));
   router.get('/:token/back-button', handle((t, f) => useCase.getBackButtonTracks(t, f.limit ?? 50)));
   router.get('/:token/artist-cumulative', handle((t, f) => useCase.getArtistCumulative(t, f.limit ?? DEFAULT_ARTIST_TIMELINE_LIMIT, f)));
+  router.get('/:token/track-cumulative', handle((t, f) => useCase.getTrackCumulative(t, f.limit ?? DEFAULT_ARTIST_TIMELINE_LIMIT, f)));
   router.get('/:token/content-split', handle((t, f) => useCase.getContentSplit(t, f)));
   router.get('/:token/obsession-timeline', handle((t, f) => useCase.getObsessionTimeline(t, f)));
   router.get('/:token/session-stamina', handle((t, f) => useCase.getSessionStamina(t, f)));
+  router.get('/:token/artist-intent', handle((t, f) => useCase.getArtistIntent(t, f)));
+  router.get('/:token/track-intent', handle((t, f) => useCase.getTrackIntent(t, f, f.limit ?? 50)));
+  router.get('/:token/personality', handle((t) => useCase.getPersonalityInputs(t)));
+  router.get('/:token/shuffle-serendipity', handle((t, f) => useCase.getShuffleSerendipity(t, f.limit ?? 25)));
+
+  router.post('/:token/personality/record', async (req, res, next) => {
+    try {
+      const { personalityId } = req.body as { personalityId?: unknown };
+      if (typeof personalityId !== 'string' || !personalityId) {
+        res.status(400).json({ error: 'personalityId is required' });
+        return;
+      }
+      const ok = await useCase.recordPersonality(req.params.token, personalityId);
+      if (!ok) {
+        res.status(404).json({ error: 'Session not found or not completed' });
+        return;
+      }
+      res.status(204).end();
+    } catch (err) {
+      next(err);
+    }
+  });
 
   return router;
 }

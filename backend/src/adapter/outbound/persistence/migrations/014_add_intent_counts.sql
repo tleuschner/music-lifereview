@@ -1,0 +1,3 @@
+ALTER TABLE monthly_artist_stats
+  ADD COLUMN IF NOT EXISTS deliberate_count INTEGER NOT NULL DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS served_count     INTEGER NOT NULL DEFAULT 0;

@@ -16,6 +16,10 @@ import type {
   ContentSplitRow,
   ObsessionPhaseRow,
   StaminaRow,
+  ArtistIntentRow,
+  TrackIntentRow,
+  PersonalityInputsRow,
+  ShuffleSerendipityRow,
 } from '../../../domain/port/outbound/StreamEntryRepository.js';
 
 export class PostgresStreamEntryRepository implements StreamEntryRepository {
@@ -32,6 +36,8 @@ export class PostgresStreamEntryRepository implements StreamEntryRepository {
           play_count: b.playCount,
           ms_played: b.msPlayed,
           skip_count: b.skipCount,
+          deliberate_count: b.deliberateCount,
+          served_count: b.servedCount,
         }));
         await trx('monthly_artist_stats').insert(batch);
       }
@@ -49,6 +55,10 @@ export class PostgresStreamEntryRepository implements StreamEntryRepository {
           ms_played: b.msPlayed,
           skip_count: b.skipCount,
           back_count: b.backCount,
+          shuffle_play_count: b.shufflePlayCount,
+          shuffle_trackdone_count: b.shuffleTrackdoneCount,
+          deliberate_count: b.deliberateCount,
+          served_count: b.servedCount,
         }));
         await trx('monthly_track_stats').insert(batch);
       }
@@ -84,6 +94,7 @@ export class PostgresStreamEntryRepository implements StreamEntryRepository {
           ms_played: b.msPlayed,
           podcast_play_count: b.podcastPlayCount,
           podcast_ms_played: b.podcastMsPlayed,
+          shuffle_count: b.shuffleCount,
         }));
         await trx('monthly_listen_totals').insert(batch);
       }
@@ -438,6 +449,149 @@ export class PostgresStreamEntryRepository implements StreamEntryRepository {
     return { periods, artists };
   }
 
+  async getTopTracksOverTime(
+    sessionId: string,
+    limit: number,
+    filters: StatsFilter,
+  ): Promise<{ periods: string[]; tracks: Array<{ name: string; artistName: string; values: number[] }> }> {
+    // Step 1: find top N tracks by total ms_played
+    const topTracksQuery = this.db('monthly_track_stats')
+      .where('session_id', sessionId)
+      .select('track_name', 'artist_name')
+      .sum('ms_played as total')
+      .groupBy('track_name', 'artist_name')
+      .orderBy('total', 'desc')
+      .limit(limit);
+
+    this.applyMonthFilters(topTracksQuery, filters);
+    const topTracks = await topTracksQuery as Array<{ track_name: string; artist_name: string }>;
+
+    if (topTracks.length === 0) return { periods: [], tracks: [] };
+
+    // Step 2: get monthly data for those tracks
+    const sql = `
+      SELECT
+        to_char(month, 'YYYY-MM') AS period,
+        track_name,
+        artist_name,
+        ms_played AS total_ms
+      FROM monthly_track_stats
+      WHERE session_id = ?
+        AND (track_name, artist_name) = ANY(SELECT * FROM unnest(?::text[], ?::text[]))
+        ${filters.from ? "AND month >= date_trunc('month', ?::date)" : ''}
+        ${filters.to   ? "AND month <= date_trunc('month', ?::date)" : ''}
+      ORDER BY month
+    `;
+
+    const trackNames = topTracks.map(r => r.track_name);
+    const artistNames = topTracks.map(r => r.artist_name);
+    const bindings: unknown[] = [sessionId, trackNames, artistNames];
+    if (filters.from) bindings.push(filters.from);
+    if (filters.to) bindings.push(filters.to);
+
+    const result = await this.db.raw(sql, bindings);
+    const rows: Array<{ period: string; track_name: string; artist_name: string; total_ms: string }> = result.rows;
+
+    // Pivot into response format
+    const periodSet = new Set<string>();
+    const trackMap = new Map<string, Map<string, number>>();
+
+    for (const t of topTracks) {
+      trackMap.set(`${t.track_name}\0${t.artist_name}`, new Map());
+    }
+
+    for (const row of rows) {
+      periodSet.add(row.period);
+      trackMap.get(`${row.track_name}\0${row.artist_name}`)?.set(row.period, Number(row.total_ms));
+    }
+
+    const periods = Array.from(periodSet).sort();
+    const tracks = topTracks.map(t => ({
+      name: t.track_name,
+      artistName: t.artist_name,
+      values: periods.map(p => trackMap.get(`${t.track_name}\0${t.artist_name}`)?.get(p) ?? 0),
+    }));
+
+    return { periods, tracks };
+  }
+
+  async getTrackCumulative(
+    sessionId: string,
+    limit: number,
+    filters: StatsFilter,
+  ): Promise<{ periods: string[]; tracks: Array<{ name: string; artistName: string; values: number[] }> }> {
+    // Step 1: find top N tracks by total ms_played within the optional filter range
+    const topTracksQuery = this.db('monthly_track_stats')
+      .where('session_id', sessionId)
+      .select('track_name', 'artist_name')
+      .sum('ms_played as total')
+      .groupBy('track_name', 'artist_name')
+      .orderBy('total', 'desc')
+      .limit(limit);
+
+    this.applyMonthFilters(topTracksQuery, filters);
+    const topTracks = await topTracksQuery as Array<{ track_name: string; artist_name: string }>;
+
+    if (topTracks.length === 0) return { periods: [], tracks: [] };
+
+    // Step 2: cumulative ms_played per track using a window function
+    const sql = `
+      SELECT
+        to_char(month, 'YYYY-MM') AS period,
+        track_name,
+        artist_name,
+        SUM(ms_played) OVER (
+          PARTITION BY track_name, artist_name
+          ORDER BY month
+          ROWS UNBOUNDED PRECEDING
+        ) AS cumulative_ms
+      FROM monthly_track_stats
+      WHERE session_id = ?
+        AND (track_name, artist_name) = ANY(SELECT * FROM unnest(?::text[], ?::text[]))
+        ${filters.from ? "AND month >= date_trunc('month', ?::date)" : ''}
+        ${filters.to   ? "AND month <= date_trunc('month', ?::date)" : ''}
+      ORDER BY month, track_name, artist_name
+    `;
+
+    const trackNames = topTracks.map(r => r.track_name);
+    const artistNames = topTracks.map(r => r.artist_name);
+    const bindings: unknown[] = [sessionId, trackNames, artistNames];
+    if (filters.from) bindings.push(filters.from);
+    if (filters.to) bindings.push(filters.to);
+
+    const result = await this.db.raw(sql, bindings);
+    const rows: Array<{ period: string; track_name: string; artist_name: string; cumulative_ms: string }> = result.rows;
+
+    // Pivot — carry forward last known value for gap months
+    const periodSet = new Set<string>();
+    const trackMap = new Map<string, Map<string, number>>();
+
+    for (const t of topTracks) {
+      trackMap.set(`${t.track_name}\0${t.artist_name}`, new Map());
+    }
+
+    for (const row of rows) {
+      periodSet.add(row.period);
+      trackMap.get(`${row.track_name}\0${row.artist_name}`)?.set(row.period, Number(row.cumulative_ms));
+    }
+
+    const periods = Array.from(periodSet).sort();
+
+    const tracks = topTracks.map(t => {
+      const key = `${t.track_name}\0${t.artist_name}`;
+      const monthMap = trackMap.get(key)!;
+      let lastVal = 0;
+      const values = periods.map(p => {
+        const val = monthMap.get(p);
+        if (val !== undefined) lastVal = val;
+        return lastVal;
+      });
+      return { name: t.track_name, artistName: t.artist_name, values };
+    });
+
+    return { periods, tracks };
+  }
+
   async getBackButtonTracks(sessionId: string, limit: number): Promise<BackButtonRow[]> {
     const sql = `
       SELECT
@@ -581,6 +735,182 @@ export class PostgresStreamEntryRepository implements StreamEntryRepository {
     }));
   }
 
+  async getArtistIntent(sessionId: string, filters: StatsFilter): Promise<ArtistIntentRow[]> {
+    const sql = `
+      SELECT
+        artist_name,
+        SUM(play_count)::integer                                                          AS total_plays,
+        SUM(deliberate_count)::integer                                                    AS deliberate_plays,
+        SUM(served_count)::integer                                                        AS served_plays,
+        ROUND(
+          SUM(deliberate_count) * 100.0
+            / NULLIF(SUM(deliberate_count) + SUM(served_count), 0),
+          1
+        )                                                                                 AS deliberate_rate
+      FROM monthly_artist_stats
+      WHERE session_id = ?
+        ${filters.from ? "AND month >= date_trunc('month', ?::date)" : ''}
+        ${filters.to   ? "AND month <= date_trunc('month', ?::date)" : ''}
+      GROUP BY artist_name
+      HAVING SUM(play_count) >= 20
+        AND (SUM(deliberate_count) + SUM(served_count)) > 0
+      ORDER BY deliberate_rate DESC
+      LIMIT 50
+    `;
+
+    const bindings: unknown[] = [sessionId];
+    if (filters.from) bindings.push(filters.from);
+    if (filters.to) bindings.push(filters.to);
+
+    const result = await this.db.raw(sql, bindings);
+    return result.rows.map((r: {
+      artist_name: string;
+      total_plays: string;
+      deliberate_plays: string;
+      served_plays: string;
+      deliberate_rate: string;
+    }) => ({
+      artistName: r.artist_name,
+      totalPlays: Number(r.total_plays),
+      deliberatePlays: Number(r.deliberate_plays),
+      servedPlays: Number(r.served_plays),
+      deliberateRate: Number(r.deliberate_rate),
+    }));
+  }
+
+  async getTrackIntent(sessionId: string, filters: StatsFilter, limit: number): Promise<TrackIntentRow[]> {
+    const sql = `
+      SELECT
+        track_name,
+        artist_name,
+        SUM(play_count)::integer                                                          AS total_plays,
+        SUM(deliberate_count)::integer                                                    AS deliberate_plays,
+        SUM(served_count)::integer                                                        AS served_plays,
+        ROUND(
+          SUM(deliberate_count) * 100.0
+            / NULLIF(SUM(deliberate_count) + SUM(served_count), 0),
+          1
+        )                                                                                 AS deliberate_rate
+      FROM monthly_track_stats
+      WHERE session_id = ?
+        ${filters.from ? "AND month >= date_trunc('month', ?::date)" : ''}
+        ${filters.to   ? "AND month <= date_trunc('month', ?::date)" : ''}
+      GROUP BY track_name, artist_name
+      HAVING SUM(play_count) >= 5
+        AND (SUM(deliberate_count) + SUM(served_count)) > 0
+      ORDER BY deliberate_rate DESC
+      LIMIT ?
+    `;
+
+    const bindings: unknown[] = [sessionId];
+    if (filters.from) bindings.push(filters.from);
+    if (filters.to) bindings.push(filters.to);
+    bindings.push(limit);
+
+    const result = await this.db.raw(sql, bindings);
+    return result.rows.map((r: {
+      track_name: string;
+      artist_name: string;
+      total_plays: string;
+      deliberate_plays: string;
+      served_plays: string;
+      deliberate_rate: string;
+    }) => ({
+      trackName: r.track_name,
+      artistName: r.artist_name,
+      totalPlays: Number(r.total_plays),
+      deliberatePlays: Number(r.deliberate_plays),
+      servedPlays: Number(r.served_plays),
+      deliberateRate: Number(r.deliberate_rate),
+    }));
+  }
+
+  async getPersonalityInputs(sessionId: string): Promise<PersonalityInputsRow> {
+    // 1. Hour totals from heatmap (sum across all months)
+    const heatmapRows: Array<{ hourOfDay: string; totalMs: string }> = await this.db('monthly_heatmap')
+      .where('session_id', sessionId)
+      .select(
+        this.db.raw('hour_of_day as "hourOfDay"'),
+        this.db.raw('SUM(ms_played)::bigint as "totalMs"'),
+      )
+      .groupBy('hour_of_day');
+
+    const hourTotals = new Array(24).fill(0) as number[];
+    for (const row of heatmapRows) {
+      hourTotals[Number(row.hourOfDay)] = Number(row.totalMs);
+    }
+
+    // 2. Top 10 artist ms % of total
+    const artistTotals: Array<{ totalMs: string }> = await this.db('monthly_artist_stats')
+      .where('session_id', sessionId)
+      .select(this.db.raw('SUM(ms_played)::bigint as "totalMs"'))
+      .groupBy('artist_name')
+      .orderBy('totalMs', 'desc')
+      .limit(10);
+
+    const allArtistMs = await this.db('monthly_artist_stats')
+      .where('session_id', sessionId)
+      .sum('ms_played as total')
+      .first() as { total: string } | undefined;
+
+    const top10Ms = artistTotals.reduce((s, r) => s + Number(r.totalMs), 0);
+    const totalArtistMs = Number(allArtistMs?.total ?? 1);
+    const top10ArtistMsPct = totalArtistMs > 0
+      ? Math.round(top10Ms / totalArtistMs * 1000) / 10
+      : 0;
+
+    // 3. Global skip rate from track stats
+    const trackAgg = await this.db('monthly_track_stats')
+      .where('session_id', sessionId)
+      .select(
+        this.db.raw('SUM(skip_count)::integer as "totalSkips"'),
+        this.db.raw('SUM(play_count)::integer as "totalPlays"'),
+      )
+      .first() as { totalSkips: string; totalPlays: string } | undefined;
+
+    const totalSkips = Number(trackAgg?.totalSkips ?? 0);
+    const totalPlays = Number(trackAgg?.totalPlays ?? 1);
+    const globalSkipRate = totalPlays > 0
+      ? Math.round(totalSkips / totalPlays * 1000) / 10
+      : 0;
+
+    // 4. Avg chain length from stamina (overall session depth proxy)
+    const staminaAgg = await this.db('monthly_stamina')
+      .where('session_id', sessionId)
+      .select(
+        this.db.raw('SUM(total_chain_length)::integer as "totalChainLength"'),
+        this.db.raw('SUM(chain_count)::integer as "chainCount"'),
+      )
+      .first() as { totalChainLength: string; chainCount: string } | undefined;
+
+    const totalChainLength = Number(staminaAgg?.totalChainLength ?? 0);
+    const chainCount = Number(staminaAgg?.chainCount ?? 1);
+    const avgChainLength = chainCount > 0
+      ? Math.round(totalChainLength / chainCount * 10) / 10
+      : 1;
+
+    // 5. Shuffle rate from monthly_listen_totals
+    const shuffleAgg = await this.db('monthly_listen_totals')
+      .where('session_id', sessionId)
+      .select(
+        this.db.raw('SUM(shuffle_count)::integer as "shuffleCount"'),
+        this.db.raw('SUM(play_count)::integer as "playCount"'),
+      )
+      .first() as { shuffleCount: string; playCount: string } | undefined;
+
+    const shuffleCount = Number(shuffleAgg?.shuffleCount ?? 0);
+    const totalPlayCount = Number(shuffleAgg?.playCount ?? 1);
+    const shuffleRate = totalPlayCount > 0
+      ? Math.round(shuffleCount / totalPlayCount * 1000) / 10
+      : 0;
+
+    // 6. Unique artist count from session summary
+    const summary = await this.getSessionSummary(sessionId);
+    const uniqueArtistCount = summary?.uniqueArtists ?? 0;
+
+    return { hourTotals, top10ArtistMsPct, globalSkipRate, avgChainLength, shuffleRate, uniqueArtistCount };
+  }
+
   private applyMonthFilters(query: Knex.QueryBuilder, filters: StatsFilter): void {
     if (filters.from) {
       query.whereRaw("month >= date_trunc('month', ?::date)", [filters.from]);
@@ -588,5 +918,60 @@ export class PostgresStreamEntryRepository implements StreamEntryRepository {
     if (filters.to) {
       query.whereRaw("month <= date_trunc('month', ?::date)", [filters.to]);
     }
+  }
+
+  async getShuffleSerendipity(sessionId: string, limit: number): Promise<ShuffleSerendipityRow[]> {
+    const sql = `
+      SELECT
+        track_name,
+        artist_name,
+        SUM(shuffle_play_count)::integer                                                      AS shuffle_plays,
+        SUM(play_count)::integer                                                              AS total_plays,
+        ROUND(SUM(shuffle_trackdone_count) * 100.0 / NULLIF(SUM(shuffle_play_count), 0), 1) AS completion_rate
+      FROM monthly_track_stats
+      WHERE session_id = ?
+      GROUP BY track_name, artist_name
+      HAVING SUM(play_count) > 0
+        AND SUM(play_count) = SUM(shuffle_play_count)
+        AND SUM(shuffle_play_count) >= 3
+      ORDER BY completion_rate DESC, shuffle_plays DESC
+      LIMIT ?
+    `;
+    const result = await this.db.raw(sql, [sessionId, limit]);
+    return result.rows.map((r: {
+      track_name: string;
+      artist_name: string;
+      shuffle_plays: string;
+      total_plays: string;
+      completion_rate: string;
+    }) => ({
+      trackName: r.track_name,
+      artistName: r.artist_name,
+      shufflePlays: Number(r.shuffle_plays),
+      totalPlays: Number(r.total_plays),
+      completionRate: Number(r.completion_rate),
+    }));
+  }
+
+  async upsertPersonalityRecord(sessionId: string, personalityId: string): Promise<void> {
+    await this.db.raw(
+      `INSERT INTO personality_records (session_id, personality_id)
+       VALUES (?, ?)
+       ON CONFLICT (session_id) DO UPDATE SET personality_id = EXCLUDED.personality_id, recorded_at = NOW()`,
+      [sessionId, personalityId],
+    );
+  }
+
+  async getPersonalityDistribution(): Promise<Array<{ personalityId: string; count: number }>> {
+    const result = await this.db.raw(
+      `SELECT personality_id, COUNT(*)::integer AS count
+       FROM personality_records
+       GROUP BY personality_id
+       ORDER BY count DESC`,
+    );
+    return result.rows.map((r: { personality_id: string; count: number }) => ({
+      personalityId: r.personality_id,
+      count: r.count,
+    }));
   }
 }

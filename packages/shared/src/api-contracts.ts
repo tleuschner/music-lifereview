@@ -69,6 +69,15 @@ export interface ArtistTimelineResponse {
   }>;
 }
 
+export interface TrackTimelineResponse {
+  periods: string[];
+  tracks: Array<{
+    name: string;       // track name
+    artistName: string; // artist name
+    values: number[];   // hours per period
+  }>;
+}
+
 export interface DiscoveryRatePoint {
   period: string;
   newSongs: number;
@@ -120,6 +129,59 @@ export interface SessionStaminaResponse {
   /** 7 rows (Mon–Sun) × 24 cols (0–23h), each cell = average chain length */
   data: number[][];
   overallAverage: number;
+}
+
+export interface ArtistIntentEntry {
+  name: string;
+  totalPlays: number;
+  deliberatePlays: number; // reason_start: clickrow / playbtn / backbtn
+  servedPlays: number;     // reason_start: trackdone / fwdbtn
+  deliberateRate: number;  // deliberatePlays / (deliberatePlays + servedPlays) × 100
+}
+
+export interface TrackIntentEntry {
+  name: string;
+  artistName: string;
+  totalPlays: number;
+  deliberatePlays: number; // reason_start: clickrow / playbtn / backbtn
+  servedPlays: number;     // reason_start: trackdone / fwdbtn
+  deliberateRate: number;  // deliberatePlays / (deliberatePlays + servedPlays) × 100
+}
+
+export interface ShuffleSerendipityEntry {
+  name: string;
+  artistName: string;
+  shufflePlays: number;    // plays where shuffle = true
+  completionRate: number;  // shuffle_trackdone / shuffle_plays × 100 (0–100)
+  totalPlays: number;
+}
+
+export interface PersonalityInputsResponse {
+  /** Total ms_played per hour of day (index 0 = midnight, 23 = 11pm) */
+  hourTotals: number[];
+  /** % of total listening time accounted for by the top 10 artists (0–100) */
+  top10ArtistMsPct: number;
+  /** Skipped tracks / total music plays × 100 (0–100) */
+  globalSkipRate: number;
+  /** Average consecutive-trackdone chain length (proxy for session length in songs) */
+  avgChainLength: number;
+  /** Shuffled plays / total plays × 100 (0–100) */
+  shuffleRate: number;
+  /** Total unique artists in the user's history */
+  uniqueArtistCount: number;
+}
+
+// ─── Personality Distribution ────────────────────────────
+
+export interface PersonalityDistributionEntry {
+  personalityId: string;
+  count: number;
+  percentage: number; // 0–100, rounded to 1 decimal
+}
+
+export interface PersonalityDistributionResponse {
+  entries: PersonalityDistributionEntry[];
+  total: number;
 }
 
 // ─── Community Stats ────────────────────────────────────

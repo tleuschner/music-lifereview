@@ -7,6 +7,7 @@ import type {
   TimelinePoint,
   HeatmapResponse,
   ArtistTimelineResponse,
+  TrackTimelineResponse,
   DiscoveryRatePoint,
   SkippedTrackEntry,
   ArtistSkipRateEntry,
@@ -14,6 +15,10 @@ import type {
   ContentSplitPoint,
   ObsessionPhasePoint,
   SessionStaminaResponse,
+  ArtistIntentEntry,
+  TrackIntentEntry,
+  PersonalityInputsResponse,
+  ShuffleSerendipityEntry,
 } from '@music-livereview/shared';
 import * as api from '../services/api';
 
@@ -29,9 +34,15 @@ export function useStreamingData(token: Ref<string>, filters: Ref<StatsFilter>) 
   const artistLoyalty = ref<ArtistSkipRateEntry[]>([]);
   const backButtonTracks = ref<BackButtonTrackEntry[]>([]);
   const artistCumulative = ref<ArtistTimelineResponse | null>(null);
+  const trackTimeline = ref<TrackTimelineResponse | null>(null);
+  const trackCumulative = ref<TrackTimelineResponse | null>(null);
   const contentSplit = ref<ContentSplitPoint[]>([]);
   const obsessionTimeline = ref<ObsessionPhasePoint[]>([]);
   const sessionStamina = ref<SessionStaminaResponse | null>(null);
+  const artistIntent = ref<ArtistIntentEntry[]>([]);
+  const trackIntent = ref<TrackIntentEntry[]>([]);
+  const personalityInputs = ref<PersonalityInputsResponse | null>(null);
+  const shuffleSerendipity = ref<ShuffleSerendipityEntry[]>([]);
 
   const loadingStates = reactive<Record<string, boolean>>({
     overview: false,
@@ -45,9 +56,15 @@ export function useStreamingData(token: Ref<string>, filters: Ref<StatsFilter>) 
     artistLoyalty: false,
     backButtonTracks: false,
     artistCumulative: false,
+    trackTimeline: false,
+    trackCumulative: false,
     contentSplit: false,
     obsessionTimeline: false,
     sessionStamina: false,
+    artistIntent: false,
+    trackIntent: false,
+    personalityInputs: false,
+    shuffleSerendipity: false,
   });
 
   const loading = computed(() => Object.values(loadingStates).some(Boolean));
@@ -79,9 +96,15 @@ export function useStreamingData(token: Ref<string>, filters: Ref<StatsFilter>) 
       fetchOne('artistLoyalty', artistLoyalty, () => api.getArtistLoyalty(token.value, f)),
       fetchOne('backButtonTracks', backButtonTracks, () => api.getBackButtonTracks(token.value, f)),
       fetchOne('artistCumulative', artistCumulative, () => api.getArtistCumulative(token.value, f)),
+      fetchOne('trackTimeline', trackTimeline, () => api.getTopTracksOverTime(token.value, f)),
+      fetchOne('trackCumulative', trackCumulative, () => api.getTrackCumulative(token.value, f)),
       fetchOne('contentSplit', contentSplit, () => api.getContentSplit(token.value, f)),
       fetchOne('obsessionTimeline', obsessionTimeline, () => api.getObsessionTimeline(token.value, f)),
       fetchOne('sessionStamina', sessionStamina, () => api.getSessionStamina(token.value, f)),
+      fetchOne('artistIntent', artistIntent, () => api.getArtistIntent(token.value, f)),
+      fetchOne('trackIntent', trackIntent, () => api.getTrackIntent(token.value, f)),
+      fetchOne('personalityInputs', personalityInputs, () => api.getPersonalityInputs(token.value)),
+      fetchOne('shuffleSerendipity', shuffleSerendipity, () => api.getShuffleSerendipity(token.value, f)),
     ]);
   }
 
@@ -102,9 +125,15 @@ export function useStreamingData(token: Ref<string>, filters: Ref<StatsFilter>) 
     artistLoyalty,
     backButtonTracks,
     artistCumulative,
+    trackTimeline,
+    trackCumulative,
     contentSplit,
     obsessionTimeline,
     sessionStamina,
+    artistIntent,
+    trackIntent,
+    personalityInputs,
+    shuffleSerendipity,
     fetchAll,
   };
 }

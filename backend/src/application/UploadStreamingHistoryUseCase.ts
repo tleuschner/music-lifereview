@@ -98,11 +98,11 @@ export class UploadStreamingHistoryUseCase implements UploadStreamingHistory {
 
   private aggregateEntries(rawEntries: SpotifyStreamEntry[]): { summary: SessionSummary; aggregated: AggregatedIngestData } {
     // Accumulation maps
-    const artistMonthly = new Map<string, { playCount: number; msPlayed: number; skipCount: number }>();
-    const trackMonthly = new Map<string, { trackName: string; artistName: string; albumName: string | null; spotifyTrackUri: string | null; playCount: number; msPlayed: number; skipCount: number; backCount: number }>();
+    const artistMonthly = new Map<string, { playCount: number; msPlayed: number; skipCount: number; deliberateCount: number; servedCount: number }>();
+    const trackMonthly = new Map<string, { trackName: string; artistName: string; albumName: string | null; spotifyTrackUri: string | null; playCount: number; msPlayed: number; skipCount: number; backCount: number; shufflePlayCount: number; shuffleTrackdoneCount: number; deliberateCount: number; servedCount: number }>();
     const heatmapMonthly = new Map<string, number>();
     const trackFirstPlayMap = new Map<string, Date>();
-    const monthlyTotals = new Map<string, { playCount: number; msPlayed: number; podcastPlayCount: number; podcastMsPlayed: number }>();
+    const monthlyTotals = new Map<string, { playCount: number; msPlayed: number; podcastPlayCount: number; podcastMsPlayed: number; shuffleCount: number }>();
 
     // Summary accumulators
     let totalMs = 0;
@@ -123,7 +123,11 @@ export class UploadStreamingHistoryUseCase implements UploadStreamingHistory {
       const hour = ts.getUTCHours();
       const skipped = e.skipped ?? false;
       const wentBack = e.reason_start === 'backbtn';
+      const isShufflePlay = e.shuffle === true;
+      const isShuffleTrackdone = isShufflePlay && e.reason_end === 'trackdone';
       const isPodcast = !e.master_metadata_track_name && (e.episode_name != null || e.spotify_episode_uri != null);
+      const isDeliberate = e.reason_start === 'clickrow' || e.reason_start === 'playbtn' || e.reason_start === 'backbtn';
+      const isServed = e.reason_start === 'trackdone' || e.reason_start === 'fwdbtn';
 
       // Summary
       totalEntries++;
@@ -142,8 +146,16 @@ export class UploadStreamingHistoryUseCase implements UploadStreamingHistory {
           existing.playCount++;
           existing.msPlayed += e.ms_played;
           if (skipped) existing.skipCount++;
+          if (isDeliberate) existing.deliberateCount++;
+          if (isServed) existing.servedCount++;
         } else {
-          artistMonthly.set(key, { playCount: 1, msPlayed: e.ms_played, skipCount: skipped ? 1 : 0 });
+          artistMonthly.set(key, {
+            playCount: 1,
+            msPlayed: e.ms_played,
+            skipCount: skipped ? 1 : 0,
+            deliberateCount: isDeliberate ? 1 : 0,
+            servedCount: isServed ? 1 : 0,
+          });
         }
       }
 
@@ -156,6 +168,10 @@ export class UploadStreamingHistoryUseCase implements UploadStreamingHistory {
           existing.msPlayed += e.ms_played;
           if (skipped) existing.skipCount++;
           if (wentBack) existing.backCount++;
+          if (isShufflePlay) existing.shufflePlayCount++;
+          if (isShuffleTrackdone) existing.shuffleTrackdoneCount++;
+          if (isDeliberate) existing.deliberateCount++;
+          if (isServed) existing.servedCount++;
         } else {
           trackMonthly.set(key, {
             trackName: e.master_metadata_track_name,
@@ -166,6 +182,10 @@ export class UploadStreamingHistoryUseCase implements UploadStreamingHistory {
             msPlayed: e.ms_played,
             skipCount: skipped ? 1 : 0,
             backCount: wentBack ? 1 : 0,
+            shufflePlayCount: isShufflePlay ? 1 : 0,
+            shuffleTrackdoneCount: isShuffleTrackdone ? 1 : 0,
+            deliberateCount: isDeliberate ? 1 : 0,
+            servedCount: isServed ? 1 : 0,
           });
         }
       }
@@ -188,12 +208,14 @@ export class UploadStreamingHistoryUseCase implements UploadStreamingHistory {
         mt.playCount++;
         mt.msPlayed += e.ms_played;
         if (isPodcast) { mt.podcastPlayCount++; mt.podcastMsPlayed += e.ms_played; }
+        if (isShufflePlay) mt.shuffleCount++;
       } else {
         monthlyTotals.set(monthStr, {
           playCount: 1,
           msPlayed: e.ms_played,
           podcastPlayCount: isPodcast ? 1 : 0,
           podcastMsPlayed: isPodcast ? e.ms_played : 0,
+          shuffleCount: isShufflePlay ? 1 : 0,
         });
       }
     }
@@ -236,7 +258,15 @@ export class UploadStreamingHistoryUseCase implements UploadStreamingHistory {
     const artistBuckets: MonthlyArtistBucket[] = [];
     for (const [key, val] of artistMonthly) {
       const [monthStr, artistName] = key.split('|');
-      artistBuckets.push({ month: new Date(monthStr), artistName, ...val });
+      artistBuckets.push({
+        month: new Date(monthStr),
+        artistName,
+        playCount: val.playCount,
+        msPlayed: val.msPlayed,
+        skipCount: val.skipCount,
+        deliberateCount: val.deliberateCount,
+        servedCount: val.servedCount,
+      });
     }
 
     const trackBuckets: MonthlyTrackBucket[] = [];
@@ -272,6 +302,7 @@ export class UploadStreamingHistoryUseCase implements UploadStreamingHistory {
         msPlayed: val.msPlayed,
         podcastPlayCount: val.podcastPlayCount,
         podcastMsPlayed: val.podcastMsPlayed,
+        shuffleCount: val.shuffleCount,
       });
     }
 

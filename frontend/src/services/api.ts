@@ -7,6 +7,7 @@ import type {
   TimelinePoint,
   HeatmapResponse,
   ArtistTimelineResponse,
+  TrackTimelineResponse,
   DiscoveryRatePoint,
   SkippedTrackEntry,
   ArtistSkipRateEntry,
@@ -14,10 +15,15 @@ import type {
   ContentSplitPoint,
   ObsessionPhasePoint,
   SessionStaminaResponse,
+  ArtistIntentEntry,
+  TrackIntentEntry,
+  PersonalityInputsResponse,
+  PersonalityDistributionResponse,
   GlobalStatsResponse,
   PercentileResponse,
   TrendingArtistEntry,
   StatsFilter,
+  ShuffleSerendipityEntry,
 } from '@music-livereview/shared';
 import { PII_FIELDS } from '@music-livereview/shared';
 
@@ -109,6 +115,11 @@ export async function getTopArtistsOverTime(token: string, filters: StatsFilter 
   return data;
 }
 
+export async function getTopTracksOverTime(token: string, filters: StatsFilter = {}): Promise<TrackTimelineResponse> {
+  const { data } = await http.get(`/stats/${token}/top-tracks-over-time`, { params: filterParams(filters) });
+  return data;
+}
+
 export async function getDiscoveryRate(token: string, filters: StatsFilter = {}): Promise<DiscoveryRatePoint[]> {
   const { data } = await http.get(`/stats/${token}/discovery`, { params: filterParams(filters) });
   return data;
@@ -134,6 +145,11 @@ export async function getArtistCumulative(token: string, filters: StatsFilter = 
   return data;
 }
 
+export async function getTrackCumulative(token: string, filters: StatsFilter = {}): Promise<TrackTimelineResponse> {
+  const { data } = await http.get(`/stats/${token}/track-cumulative`, { params: filterParams(filters) });
+  return data;
+}
+
 export async function getContentSplit(token: string, filters: StatsFilter = {}): Promise<ContentSplitPoint[]> {
   const { data } = await http.get(`/stats/${token}/content-split`, { params: filterParams(filters) });
   return data;
@@ -146,6 +162,35 @@ export async function getObsessionTimeline(token: string, filters: StatsFilter =
 
 export async function getSessionStamina(token: string, filters: StatsFilter = {}): Promise<SessionStaminaResponse> {
   const { data } = await http.get(`/stats/${token}/session-stamina`, { params: filterParams(filters) });
+  return data;
+}
+
+export async function getArtistIntent(token: string, filters: StatsFilter = {}): Promise<ArtistIntentEntry[]> {
+  const { data } = await http.get(`/stats/${token}/artist-intent`, { params: filterParams(filters) });
+  return data;
+}
+
+export async function getTrackIntent(token: string, filters: StatsFilter = {}): Promise<TrackIntentEntry[]> {
+  const { data } = await http.get(`/stats/${token}/track-intent`, { params: filterParams(filters) });
+  return data;
+}
+
+export async function getPersonalityInputs(token: string): Promise<PersonalityInputsResponse> {
+  const { data } = await http.get(`/stats/${token}/personality`);
+  return data;
+}
+
+export async function getShuffleSerendipity(token: string, filters: StatsFilter = {}): Promise<ShuffleSerendipityEntry[]> {
+  const { data } = await http.get(`/stats/${token}/shuffle-serendipity`, { params: filterParams(filters) });
+  return data;
+}
+
+export async function recordPersonality(token: string, personalityId: string): Promise<void> {
+  await http.post(`/stats/${token}/personality/record`, { personalityId });
+}
+
+export async function getPersonalityDistribution(): Promise<PersonalityDistributionResponse> {
+  const { data } = await http.get('/community/personality-distribution');
   return data;
 }
 

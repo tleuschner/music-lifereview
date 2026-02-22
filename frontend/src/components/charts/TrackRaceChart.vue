@@ -2,11 +2,11 @@
   <div class="chart-container card">
     <div class="chart-header">
       <div>
-        <h3 class="section-title">All-Time Artist Race</h3>
-        <p class="section-subtitle">Cumulative listening hours — see exactly when each artist took over your life.</p>
+        <h3 class="section-title">All-Time Song Race</h3>
+        <p class="section-subtitle">Cumulative listening hours — see exactly when each song took over your life.</p>
       </div>
-      <div v-if="chartData && selectedArtists.length > 0" class="controls">
-        <span class="selection-count">{{ selectedArtists.length }} of {{ legendItems.length }} shown</span>
+      <div v-if="chartData && selectedTracks.length > 0" class="controls">
+        <span class="selection-count">{{ selectedTracks.length }} of {{ legendItems.length }} shown</span>
         <button class="ctrl-btn" @click="showAll">Show All</button>
       </div>
     </div>
@@ -22,17 +22,18 @@
       <div class="legend">
         <button
           v-for="item in legendItems"
-          :key="item.name"
+          :key="item.label"
           class="legend-item"
           :class="{
-            'legend-item--active': selectedArtists.length === 0 || selectedArtists.includes(item.name),
-            'legend-item--dim': selectedArtists.length > 0 && !selectedArtists.includes(item.name),
+            'legend-item--active': selectedTracks.length === 0 || selectedTracks.includes(item.label),
+            'legend-item--dim': selectedTracks.length > 0 && !selectedTracks.includes(item.label),
           }"
-          :style="selectedArtists.includes(item.name) ? { borderColor: item.color + '80' } : {}"
-          @click="toggleArtist(item.name)"
+          :style="selectedTracks.includes(item.label) ? { borderColor: item.color + '80' } : {}"
+          @click="toggleTrack(item.label)"
         >
           <span class="legend-dot" :style="{ background: item.color }"></span>
-          {{ item.name }}
+          <span class="legend-track">{{ item.trackName }}</span>
+          <span class="legend-artist">{{ item.artistName }}</span>
         </button>
       </div>
     </template>
@@ -51,7 +52,7 @@ import {
   Tooltip,
   type ChartOptions,
 } from 'chart.js';
-import type { ArtistTimelineResponse } from '@music-livereview/shared';
+import type { TrackTimelineResponse } from '@music-livereview/shared';
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Tooltip);
 
@@ -60,19 +61,22 @@ const COLORS = [
   '#e74c3c', '#e67e22', '#f1c40f', '#00bcd4', '#ff5722',
 ];
 
-const props = defineProps<{ data: ArtistTimelineResponse | null }>();
+const props = defineProps<{ data: TrackTimelineResponse | null }>();
 const chartRef = ref<InstanceType<typeof Line> | null>(null);
 
-// selectedArtists: empty = all visible; non-empty = only those are visible
-const selectedArtists = ref<string[]>([]);
+const selectedTracks = ref<string[]>([]);
+
+function trackLabel(name: string, artistName: string): string {
+  return `${name} — ${artistName}`;
+}
 
 const chartData = computed(() => {
   if (!props.data || !props.data.periods.length) return null;
   return {
     labels: props.data.periods,
-    datasets: props.data.artists.map((artist, i) => ({
-      label: artist.name,
-      data: artist.values,
+    datasets: props.data.tracks.map((track, i) => ({
+      label: trackLabel(track.name, track.artistName),
+      data: track.values,
       borderColor: COLORS[i % COLORS.length],
       backgroundColor: 'transparent',
       fill: false,
@@ -86,8 +90,10 @@ const chartData = computed(() => {
 
 const legendItems = computed(() => {
   if (!props.data) return [];
-  return props.data.artists.map((a, i) => ({
-    name: a.name,
+  return props.data.tracks.map((t, i) => ({
+    label: trackLabel(t.name, t.artistName),
+    trackName: t.name,
+    artistName: t.artistName,
     color: COLORS[i % COLORS.length],
   }));
 });
@@ -126,25 +132,25 @@ function getChart(): ChartJS<'line'> | null {
 function applyVisibility() {
   const chart = getChart();
   if (!chart) return;
-  const sel = selectedArtists.value;
+  const sel = selectedTracks.value;
   chart.data.datasets.forEach((ds, i) => {
     chart.getDatasetMeta(i).hidden = sel.length > 0 && !sel.includes(ds.label ?? '');
   });
   chart.update('none');
 }
 
-function toggleArtist(name: string) {
-  const current = selectedArtists.value;
-  if (current.includes(name)) {
-    selectedArtists.value = current.filter(n => n !== name);
+function toggleTrack(label: string) {
+  const current = selectedTracks.value;
+  if (current.includes(label)) {
+    selectedTracks.value = current.filter(n => n !== label);
   } else {
-    selectedArtists.value = [...current, name];
+    selectedTracks.value = [...current, label];
   }
   applyVisibility();
 }
 
 function showAll() {
-  selectedArtists.value = [];
+  selectedTracks.value = [];
   const chart = getChart();
   if (!chart) return;
   chart.data.datasets.forEach((_, i) => {
@@ -153,9 +159,8 @@ function showAll() {
   chart.update('none');
 }
 
-// Reset selection when new data arrives (chart rebuilds, hidden states reset)
 watch(() => props.data, () => {
-  selectedArtists.value = [];
+  selectedTracks.value = [];
 });
 </script>
 
@@ -236,17 +241,22 @@ watch(() => props.data, () => {
   background: rgba(255,255,255,0.09);
   color: #fff;
 }
-.legend-item--active {
-  color: #e0e0e0;
-}
-.legend-item--dim {
-  opacity: 0.3;
-}
+.legend-item--active { color: #e0e0e0; }
+.legend-item--dim { opacity: 0.3; }
 
 .legend-dot {
   width: 8px;
   height: 8px;
   border-radius: 50%;
   flex-shrink: 0;
+}
+
+.legend-track {
+  color: #e0e0e0;
+}
+
+.legend-artist {
+  color: #666;
+  font-size: 0.72rem;
 }
 </style>

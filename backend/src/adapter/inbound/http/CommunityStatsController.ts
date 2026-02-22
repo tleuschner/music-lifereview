@@ -26,6 +26,15 @@ export function createCommunityStatsController(useCase: QueryCommunityStats): Ro
     }
   });
 
+  router.get('/personality-distribution', async (_req, res, next) => {
+    try {
+      const result = await useCase.getPersonalityDistribution();
+      res.json(result);
+    } catch (err) {
+      next(err);
+    }
+  });
+
   router.get('/trending', async (req, res, next) => {
     try {
       const period = req.query.period as string;

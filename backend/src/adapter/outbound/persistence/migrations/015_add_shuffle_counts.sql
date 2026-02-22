@@ -1,0 +1,2 @@
+ALTER TABLE monthly_listen_totals
+  ADD COLUMN IF NOT EXISTS shuffle_count INTEGER NOT NULL DEFAULT 0;

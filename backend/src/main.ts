@@ -37,6 +37,7 @@ const personalStatsUseCase = new QueryPersonalStatsUseCase(
 const communityStatsUseCase = new QueryCommunityStatsUseCase(
   statsStore,
   sessionRepo,
+  entryRepo,
 );
 
 // Express app

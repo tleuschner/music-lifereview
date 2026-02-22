@@ -63,6 +63,8 @@ export interface MonthlyArtistBucket {
   playCount: number;
   msPlayed: number;
   skipCount: number;
+  deliberateCount: number;
+  servedCount: number;
 }
 
 export interface MonthlyTrackBucket {
@@ -75,6 +77,18 @@ export interface MonthlyTrackBucket {
   msPlayed: number;
   skipCount: number;
   backCount: number;
+  shufflePlayCount: number;
+  shuffleTrackdoneCount: number;
+  deliberateCount: number;
+  servedCount: number;
+}
+
+export interface ShuffleSerendipityRow {
+  trackName: string;
+  artistName: string;
+  shufflePlays: number;
+  completionRate: number;
+  totalPlays: number;
 }
 
 export interface BackButtonRow {
@@ -103,6 +117,16 @@ export interface MonthlyTotalBucket {
   msPlayed: number;
   podcastPlayCount: number;
   podcastMsPlayed: number;
+  shuffleCount: number;
+}
+
+export interface PersonalityInputsRow {
+  hourTotals: number[];
+  top10ArtistMsPct: number;
+  globalSkipRate: number;
+  avgChainLength: number;
+  shuffleRate: number;
+  uniqueArtistCount: number;
 }
 
 export interface ContentSplitRow {
@@ -119,6 +143,23 @@ export interface ObsessionPhaseRow {
   artistMs: number;
   totalMs: number;
   percentage: number;
+}
+
+export interface ArtistIntentRow {
+  artistName: string;
+  totalPlays: number;
+  deliberatePlays: number;
+  servedPlays: number;
+  deliberateRate: number;
+}
+
+export interface TrackIntentRow {
+  trackName: string;
+  artistName: string;
+  totalPlays: number;
+  deliberatePlays: number;
+  servedPlays: number;
+  deliberateRate: number;
 }
 
 export interface StaminaRow {
@@ -155,12 +196,21 @@ export interface StreamEntryRepository {
   getTimeline(sessionId: string, filters: StatsFilter): Promise<TimelineRow[]>;
   getHeatmap(sessionId: string, filters: StatsFilter): Promise<HeatmapRow[]>;
   getTopArtistsOverTime(sessionId: string, limit: number, filters: StatsFilter): Promise<{ periods: string[]; artists: Array<{ name: string; values: number[] }> }>;
+  getTopTracksOverTime(sessionId: string, limit: number, filters: StatsFilter): Promise<{ periods: string[]; tracks: Array<{ name: string; artistName: string; values: number[] }> }>;
   getDiscoveryRate(sessionId: string, filters: StatsFilter): Promise<DiscoveryRow[]>;
   getSkippedTracks(sessionId: string, limit: number): Promise<SkippedRow[]>;
   getArtistSkipRates(sessionId: string, filters: StatsFilter): Promise<ArtistSkipRateRow[]>;
   getBackButtonTracks(sessionId: string, limit: number): Promise<BackButtonRow[]>;
   getArtistCumulative(sessionId: string, limit: number, filters: StatsFilter): Promise<{ periods: string[]; artists: Array<{ name: string; values: number[] }> }>;
+  getTrackCumulative(sessionId: string, limit: number, filters: StatsFilter): Promise<{ periods: string[]; tracks: Array<{ name: string; artistName: string; values: number[] }> }>;
   getContentSplit(sessionId: string, filters: StatsFilter): Promise<ContentSplitRow[]>;
   getObsessionTimeline(sessionId: string, filters: StatsFilter): Promise<ObsessionPhaseRow[]>;
   getSessionStamina(sessionId: string, filters: StatsFilter): Promise<StaminaRow[]>;
+  getArtistIntent(sessionId: string, filters: StatsFilter): Promise<ArtistIntentRow[]>;
+  getTrackIntent(sessionId: string, filters: StatsFilter, limit: number): Promise<TrackIntentRow[]>;
+  getPersonalityInputs(sessionId: string): Promise<PersonalityInputsRow>;
+  getShuffleSerendipity(sessionId: string, limit: number): Promise<ShuffleSerendipityRow[]>;
+
+  upsertPersonalityRecord(sessionId: string, personalityId: string): Promise<void>;
+  getPersonalityDistribution(): Promise<Array<{ personalityId: string; count: number }>>;
 }

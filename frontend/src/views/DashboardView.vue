@@ -11,6 +11,10 @@
         <StatCard label="Unique Tracks" :value="overview.uniqueTracks.toLocaleString()" />
       </div>
 
+      <!-- Personality Card -->
+      <div v-if="loadingStates.personalityInputs" class="chart-container card"><LoadingSpinner /></div>
+      <PersonalityCard v-else :data="personalityInputs" :token="token" />
+
       <!-- Share Link -->
       <ShareLinkCard :url="shareUrl" />
 
@@ -47,11 +51,17 @@
       <div v-if="loadingStates.artistTimeline" class="chart-container card"><LoadingSpinner /></div>
       <StackedArtistAreaChart v-else :data="artistTimeline" />
 
+      <div v-if="loadingStates.trackTimeline" class="chart-container card"><LoadingSpinner /></div>
+      <StackedTrackAreaChart v-else :data="trackTimeline" />
+
       <div v-if="loadingStates.discoveryRate" class="chart-container card"><LoadingSpinner /></div>
       <DiscoveryVsRepetitionChart v-else :data="discoveryRate" />
 
       <div v-if="loadingStates.artistCumulative" class="chart-container card"><LoadingSpinner /></div>
       <ArtistRaceChart v-else :data="artistCumulative" />
+
+      <div v-if="loadingStates.trackCumulative" class="chart-container card"><LoadingSpinner /></div>
+      <TrackRaceChart v-else :data="trackCumulative" />
 
       <div v-if="loadingStates.artistLoyalty" class="chart-container card"><LoadingSpinner /></div>
       <ArtistLoyaltyChart v-else :data="artistLoyalty" />
@@ -67,6 +77,15 @@
 
       <div v-if="loadingStates.contentSplit" class="chart-container card"><LoadingSpinner /></div>
       <PodcastMusicChart v-else :data="contentSplit" />
+
+      <div v-if="loadingStates.artistIntent" class="chart-container card"><LoadingSpinner /></div>
+      <ArtistIntentChart v-else :data="artistIntent" />
+
+      <div v-if="loadingStates.trackIntent" class="chart-container card"><LoadingSpinner /></div>
+      <TrackIntentChart v-else :data="trackIntent" />
+
+      <div v-if="loadingStates.shuffleSerendipity" class="chart-container card"><LoadingSpinner /></div>
+      <ShuffleSerendipityChart v-else :data="shuffleSerendipity" />
     </template>
   </div>
 </template>
@@ -88,11 +107,17 @@ import StackedArtistAreaChart from '../components/charts/StackedArtistAreaChart.
 import DiscoveryVsRepetitionChart from '../components/charts/DiscoveryVsRepetitionChart.vue';
 import ArtistLoyaltyChart from '../components/charts/ArtistLoyaltyChart.vue';
 import ArtistRaceChart from '../components/charts/ArtistRaceChart.vue';
+import StackedTrackAreaChart from '../components/charts/StackedTrackAreaChart.vue';
+import TrackRaceChart from '../components/charts/TrackRaceChart.vue';
 import ReplayLeaderboard from '../components/charts/ReplayLeaderboard.vue';
 import SkippedTracksLeaderboard from '../components/charts/SkippedTracksLeaderboard.vue';
 import PodcastMusicChart from '../components/charts/PodcastMusicChart.vue';
 import ObsessionTimelineChart from '../components/charts/ObsessionTimelineChart.vue';
 import SessionStaminaChart from '../components/charts/SessionStaminaChart.vue';
+import ArtistIntentChart from '../components/charts/ArtistIntentChart.vue';
+import TrackIntentChart from '../components/charts/TrackIntentChart.vue';
+import ShuffleSerendipityChart from '../components/charts/ShuffleSerendipityChart.vue';
+import PersonalityCard from '../components/charts/PersonalityCard.vue';
 
 const route = useRoute();
 const token = computed(() => route.params.token as string);
@@ -113,9 +138,15 @@ const {
   artistLoyalty,
   backButtonTracks,
   artistCumulative,
+  trackTimeline,
+  trackCumulative,
   contentSplit,
   obsessionTimeline,
   sessionStamina,
+  artistIntent,
+  trackIntent,
+  shuffleSerendipity,
+  personalityInputs,
   fetchAll,
 } = useStreamingData(token, activeFilters);
 

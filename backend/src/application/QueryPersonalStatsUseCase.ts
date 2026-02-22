@@ -7,6 +7,7 @@ import type {
   TimelinePoint,
   HeatmapResponse,
   ArtistTimelineResponse,
+  TrackTimelineResponse,
   DiscoveryRatePoint,
   SkippedTrackEntry,
   ArtistSkipRateEntry,
@@ -14,6 +15,10 @@ import type {
   ContentSplitPoint,
   ObsessionPhasePoint,
   SessionStaminaResponse,
+  ArtistIntentEntry,
+  TrackIntentEntry,
+  PersonalityInputsResponse,
+  ShuffleSerendipityEntry,
 } from '@music-livereview/shared';
 import type { QueryPersonalStats } from '../domain/port/inbound/QueryPersonalStats.js';
 import type { UploadSessionRepository } from '../domain/port/outbound/UploadSessionRepository.js';
@@ -195,6 +200,38 @@ export class QueryPersonalStatsUseCase implements QueryPersonalStats {
     };
   }
 
+  async getTopTracksOverTime(token: string, limit: number, filters: StatsFilter): Promise<TrackTimelineResponse | null> {
+    const sessionId = await this.resolveSessionId(token);
+    if (!sessionId) return null;
+
+    const result = await this.entryRepo.getTopTracksOverTime(sessionId, limit, filters);
+
+    return {
+      periods: result.periods,
+      tracks: result.tracks.map(t => ({
+        name: t.name,
+        artistName: t.artistName,
+        values: t.values.map(v => Math.round(v / MS_PER_HOUR * 10) / 10),
+      })),
+    };
+  }
+
+  async getTrackCumulative(token: string, limit: number, filters: StatsFilter): Promise<TrackTimelineResponse | null> {
+    const sessionId = await this.resolveSessionId(token);
+    if (!sessionId) return null;
+
+    const result = await this.entryRepo.getTrackCumulative(sessionId, limit, filters);
+
+    return {
+      periods: result.periods,
+      tracks: result.tracks.map(t => ({
+        name: t.name,
+        artistName: t.artistName,
+        values: t.values.map(v => Math.round(v / MS_PER_HOUR * 10) / 10),
+      })),
+    };
+  }
+
   async getContentSplit(token: string, filters: StatsFilter): Promise<ContentSplitPoint[] | null> {
     const sessionId = await this.resolveSessionId(token);
     if (!sessionId) return null;
@@ -220,6 +257,35 @@ export class QueryPersonalStatsUseCase implements QueryPersonalStats {
       artistHours: Math.round(r.artistMs / MS_PER_HOUR * 10) / 10,
       totalHours: Math.round(r.totalMs / MS_PER_HOUR * 10) / 10,
       percentage: r.percentage,
+    }));
+  }
+
+  async getArtistIntent(token: string, filters: StatsFilter): Promise<ArtistIntentEntry[] | null> {
+    const sessionId = await this.resolveSessionId(token);
+    if (!sessionId) return null;
+
+    const rows = await this.entryRepo.getArtistIntent(sessionId, filters);
+    return rows.map(r => ({
+      name: r.artistName,
+      totalPlays: r.totalPlays,
+      deliberatePlays: r.deliberatePlays,
+      servedPlays: r.servedPlays,
+      deliberateRate: r.deliberateRate,
+    }));
+  }
+
+  async getTrackIntent(token: string, filters: StatsFilter, limit: number): Promise<TrackIntentEntry[] | null> {
+    const sessionId = await this.resolveSessionId(token);
+    if (!sessionId) return null;
+
+    const rows = await this.entryRepo.getTrackIntent(sessionId, filters, limit);
+    return rows.map(r => ({
+      name: r.trackName,
+      artistName: r.artistName,
+      totalPlays: r.totalPlays,
+      deliberatePlays: r.deliberatePlays,
+      servedPlays: r.servedPlays,
+      deliberateRate: r.deliberateRate,
     }));
   }
 
@@ -249,5 +315,32 @@ export class QueryPersonalStatsUseCase implements QueryPersonalStats {
       : 0;
 
     return { data, overallAverage };
+  }
+
+  async getPersonalityInputs(token: string): Promise<PersonalityInputsResponse | null> {
+    const sessionId = await this.resolveSessionId(token);
+    if (!sessionId) return null;
+    return this.entryRepo.getPersonalityInputs(sessionId);
+  }
+
+  async recordPersonality(token: string, personalityId: string): Promise<boolean> {
+    const sessionId = await this.resolveSessionId(token);
+    if (!sessionId) return false;
+    await this.entryRepo.upsertPersonalityRecord(sessionId, personalityId);
+    return true;
+  }
+
+  async getShuffleSerendipity(token: string, limit: number): Promise<ShuffleSerendipityEntry[] | null> {
+    const sessionId = await this.resolveSessionId(token);
+    if (!sessionId) return null;
+
+    const rows = await this.entryRepo.getShuffleSerendipity(sessionId, limit);
+    return rows.map(r => ({
+      name: r.trackName,
+      artistName: r.artistName,
+      shufflePlays: r.shufflePlays,
+      completionRate: r.completionRate,
+      totalPlays: r.totalPlays,
+    }));
   }
 }

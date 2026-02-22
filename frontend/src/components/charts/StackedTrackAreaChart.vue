@@ -1,9 +1,9 @@
 <template>
   <div class="chart-container card">
     <div class="chart-header">
-      <h3 class="section-title">Top Artists Over Time</h3>
-      <div v-if="hasData && selectedArtists.length > 0" class="controls">
-        <span class="selection-count">{{ selectedArtists.length }} of {{ legendItems.length }} shown</span>
+      <h3 class="section-title">Top Songs Over Time</h3>
+      <div v-if="hasData && selectedTracks.length > 0" class="controls">
+        <span class="selection-count">{{ selectedTracks.length }} of {{ legendItems.length }} shown</span>
         <button class="ctrl-btn" @click="showAll">Show All</button>
       </div>
     </div>
@@ -24,36 +24,37 @@
             <div class="tt-period">{{ tooltip.period }}</div>
             <div
               v-for="item in tooltip.items"
-              :key="item.name"
+              :key="item.label"
               class="tt-row"
-              :class="{ 'tt-row--active': selectedArtists.includes(item.name) }"
-              @click.stop="toggleArtist(item.name)"
+              :class="{ 'tt-row--active': selectedTracks.includes(item.label) }"
+              @click.stop="toggleTrack(item.label)"
             >
               <span class="tt-swatch" :style="{ background: item.color }"></span>
-              <span class="tt-name">{{ item.name }}</span>
+              <span class="tt-name">{{ item.label }}</span>
               <span class="tt-val">{{ item.value }}h</span>
-              <span class="tt-check">{{ selectedArtists.length > 0 ? (selectedArtists.includes(item.name) ? '✓' : '') : '' }}</span>
+              <span class="tt-check">{{ selectedTracks.length > 0 ? (selectedTracks.includes(item.label) ? '✓' : '') : '' }}</span>
             </div>
             <div class="tt-hint">click to toggle · use pills below to multi-select</div>
           </div>
         </Transition>
       </div>
 
-      <!-- Clickable legend pills (multi-select) -->
+      <!-- Clickable legend pills -->
       <div class="legend">
         <button
           v-for="item in legendItems"
-          :key="item.name"
+          :key="item.label"
           class="legend-item"
           :class="{
-            'legend-item--active': selectedArtists.length === 0 || selectedArtists.includes(item.name),
-            'legend-item--dim': selectedArtists.length > 0 && !selectedArtists.includes(item.name),
+            'legend-item--active': selectedTracks.length === 0 || selectedTracks.includes(item.label),
+            'legend-item--dim': selectedTracks.length > 0 && !selectedTracks.includes(item.label),
           }"
-          :style="selectedArtists.includes(item.name) ? { borderColor: item.color + '80' } : {}"
-          @click="toggleArtist(item.name)"
+          :style="selectedTracks.includes(item.label) ? { borderColor: item.color + '80' } : {}"
+          @click="toggleTrack(item.label)"
         >
           <span class="legend-dot" :style="{ background: item.color }"></span>
-          {{ item.name }}
+          <span class="legend-track">{{ item.trackName }}</span>
+          <span class="legend-artist">{{ item.artistName }}</span>
         </button>
       </div>
     </template>
@@ -71,7 +72,7 @@ import {
   LinearScale,
   Filler,
 } from 'chart.js';
-import type { ArtistTimelineResponse } from '@music-livereview/shared';
+import type { TrackTimelineResponse } from '@music-livereview/shared';
 
 Chart.register(LineController, LineElement, PointElement, CategoryScale, LinearScale, Filler);
 
@@ -80,29 +81,35 @@ const COLORS = [
   '#e74c3c', '#e67e22', '#f1c40f', '#00bcd4', '#ff5722',
 ];
 
-const props = defineProps<{ data: ArtistTimelineResponse | null }>();
+const props = defineProps<{ data: TrackTimelineResponse | null }>();
 
 const canvasRef = ref<HTMLCanvasElement | null>(null);
 const wrapperRef = ref<HTMLDivElement | null>(null);
 let chart: Chart<'line'> | null = null;
 
-// selectedArtists: empty = all visible; non-empty = only those are visible
-const selectedArtists = ref<string[]>([]);
+// selectedTracks: empty = all visible; non-empty = only those labels are visible
+const selectedTracks = ref<string[]>([]);
 
 const tooltip = ref({
   visible: false,
   x: 0,
   y: 0,
   period: '',
-  items: [] as Array<{ name: string; color: string; value: number }>,
+  items: [] as Array<{ label: string; color: string; value: number }>,
 });
 
 const hasData = computed(() => !!props.data && props.data.periods.length > 0);
 
+function trackLabel(name: string, artistName: string): string {
+  return `${name} — ${artistName}`;
+}
+
 const legendItems = computed(() => {
   if (!props.data) return [];
-  return props.data.artists.map((a, i) => ({
-    name: a.name,
+  return props.data.tracks.map((t, i) => ({
+    label: trackLabel(t.name, t.artistName),
+    trackName: t.name,
+    artistName: t.artistName,
     color: COLORS[i % COLORS.length],
   }));
 });
@@ -110,9 +117,9 @@ const legendItems = computed(() => {
 // ─── Chart lifecycle ──────────────────────────────────────────────────────────
 
 function buildDatasets() {
-  return (props.data?.artists ?? []).map((artist, i) => ({
-    label: artist.name,
-    data: artist.values,
+  return (props.data?.tracks ?? []).map((track, i) => ({
+    label: trackLabel(track.name, track.artistName),
+    data: track.values,
     borderColor: COLORS[i % COLORS.length],
     backgroundColor: COLORS[i % COLORS.length] + '33',
     fill: true,
@@ -161,9 +168,9 @@ function destroyChart() {
 
 // ─── Hover / tooltip ──────────────────────────────────────────────────────────
 
-interface TooltipItem { name: string; color: string; value: number }
+interface TooltipItem { label: string; color: string; value: number }
 
-function getArtistsUnderCursor(event: MouseEvent): { period: string; items: TooltipItem[] } | null {
+function getTracksUnderCursor(event: MouseEvent): { period: string; items: TooltipItem[] } | null {
   if (!chart) return null;
 
   const elements = chart.getElementsAtEventForMode(
@@ -184,7 +191,7 @@ function getArtistsUnderCursor(event: MouseEvent): { period: string; items: Tool
     const val = Number(dataset.data[xIndex]) || 0;
     if (val > 0 && val >= cursorY) {
       items.push({
-        name: dataset.label ?? '',
+        label: dataset.label ?? '',
         color: dataset.borderColor as string,
         value: Math.round(val * 10) / 10,
       });
@@ -198,7 +205,7 @@ function getArtistsUnderCursor(event: MouseEvent): { period: string; items: Tool
 function handleMouseMove(event: MouseEvent) {
   if (!wrapperRef.value || !canvasRef.value) return;
 
-  const result = getArtistsUnderCursor(event);
+  const result = getTracksUnderCursor(event);
   if (!result || !result.items.length) {
     tooltip.value.visible = false;
     canvasRef.value.style.cursor = 'default';
@@ -211,7 +218,7 @@ function handleMouseMove(event: MouseEvent) {
   const wrapperRect = wrapperRef.value.getBoundingClientRect();
   const relX = canvasRect.left - wrapperRect.left + event.offsetX;
   const relY = canvasRect.top - wrapperRect.top + event.offsetY;
-  const ttWidth = 200;
+  const ttWidth = 240;
   const x = relX + 18 + ttWidth > wrapperRef.value.offsetWidth ? relX - ttWidth - 8 : relX + 18;
 
   tooltip.value = {
@@ -232,34 +239,31 @@ function handleMouseLeave() {
 
 function applyVisibility() {
   if (!chart) return;
-  const sel = selectedArtists.value;
+  const sel = selectedTracks.value;
   chart.data.datasets.forEach((_, i) => {
     chart!.getDatasetMeta(i).hidden = sel.length > 0 && !sel.includes(chart!.data.datasets[i].label ?? '');
   });
   chart.update('none');
 }
 
-function toggleArtist(name: string) {
-  const current = selectedArtists.value;
-  if (current.includes(name)) {
-    const next = current.filter(n => n !== name);
-    // If deselecting the last one, reset to "show all"
-    selectedArtists.value = next;
+function toggleTrack(label: string) {
+  const current = selectedTracks.value;
+  if (current.includes(label)) {
+    selectedTracks.value = current.filter(n => n !== label);
   } else {
-    selectedArtists.value = [...current, name];
+    selectedTracks.value = [...current, label];
   }
   applyVisibility();
 }
 
 function handleCanvasClick(event: MouseEvent) {
-  const result = getArtistsUnderCursor(event);
-  // Only auto-toggle when there is exactly one unambiguous artist under the cursor
+  const result = getTracksUnderCursor(event);
   if (!result || result.items.length !== 1) return;
-  toggleArtist(result.items[0].name);
+  toggleTrack(result.items[0].label);
 }
 
 function showAll() {
-  selectedArtists.value = [];
+  selectedTracks.value = [];
   if (!chart) return;
   chart.data.datasets.forEach((_, i) => {
     chart!.getDatasetMeta(i).hidden = false;
@@ -277,7 +281,7 @@ watch(
   () => props.data,
   () => {
     destroyChart();
-    selectedArtists.value = [];
+    selectedTracks.value = [];
     tooltip.value.visible = false;
     if (hasData.value) buildChart();
   },
@@ -324,7 +328,6 @@ onUnmounted(destroyChart);
   font-size: 0.9rem;
 }
 
-/* Chart area */
 .chart-wrapper {
   position: relative;
   height: 400px;
@@ -344,8 +347,8 @@ onUnmounted(destroyChart);
   border: 1px solid #333;
   border-radius: 6px;
   padding: 8px 10px;
-  min-width: 170px;
-  max-width: 230px;
+  min-width: 200px;
+  max-width: 260px;
   box-shadow: 0 4px 16px rgba(0,0,0,0.5);
   user-select: none;
 }
@@ -433,18 +436,23 @@ onUnmounted(destroyChart);
   background: rgba(255,255,255,0.09);
   color: #fff;
 }
-.legend-item--active {
-  color: #e0e0e0;
-}
-.legend-item--dim {
-  opacity: 0.3;
-}
+.legend-item--active { color: #e0e0e0; }
+.legend-item--dim { opacity: 0.3; }
 
 .legend-dot {
   width: 8px;
   height: 8px;
   border-radius: 50%;
   flex-shrink: 0;
+}
+
+.legend-track {
+  color: #e0e0e0;
+}
+
+.legend-artist {
+  color: #666;
+  font-size: 0.72rem;
 }
 
 /* Tooltip transition */

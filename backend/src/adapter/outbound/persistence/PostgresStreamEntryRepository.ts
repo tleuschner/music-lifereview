@@ -38,7 +38,7 @@ export class PostgresStreamEntryRepository implements StreamEntryRepository {
         const batch = data.artistBuckets.slice(i, i + BATCH_INSERT_SIZE).map(b => ({
           session_id: sessionId,
           month: b.month,
-          artist_name: b.artistName,
+          artist_id: b.artistId,
           play_count: b.playCount,
           ms_played: b.msPlayed,
           skip_count: b.skipCount,
@@ -57,10 +57,8 @@ export class PostgresStreamEntryRepository implements StreamEntryRepository {
         const batch = data.trackBuckets.slice(i, i + BATCH_INSERT_SIZE).map(b => ({
           session_id: sessionId,
           month: b.month,
-          track_name: b.trackName,
-          artist_name: b.artistName,
-          album_name: b.albumName,
-          spotify_track_uri: b.spotifyTrackUri,
+          track_id: b.trackId,
+          artist_id: b.artistId,
           play_count: b.playCount,
           ms_played: b.msPlayed,
           skip_count: b.skipCount,
@@ -76,23 +74,25 @@ export class PostgresStreamEntryRepository implements StreamEntryRepository {
         await trx('monthly_track_stats').insert(batch);
       }
 
-      // Monthly heatmap
-      for (let i = 0; i < data.heatmapBuckets.length; i += BATCH_INSERT_SIZE) {
-        const batch = data.heatmapBuckets.slice(i, i + BATCH_INSERT_SIZE).map(b => ({
+      // Monthly hourly stats (merged heatmap + stamina)
+      for (let i = 0; i < data.hourlyStatsBuckets.length; i += BATCH_INSERT_SIZE) {
+        const batch = data.hourlyStatsBuckets.slice(i, i + BATCH_INSERT_SIZE).map(b => ({
           session_id: sessionId,
           month: b.month,
           day_of_week: b.dayOfWeek,
           hour_of_day: b.hourOfDay,
           ms_played: b.msPlayed,
+          total_chain_length: b.totalChainLength,
+          chain_count: b.chainCount,
         }));
-        await trx('monthly_heatmap').insert(batch);
+        await trx('monthly_hourly_stats').insert(batch);
       }
 
       // Track first play
       for (let i = 0; i < data.trackFirstPlays.length; i += BATCH_INSERT_SIZE) {
         const batch = data.trackFirstPlays.slice(i, i + BATCH_INSERT_SIZE).map(b => ({
           session_id: sessionId,
-          spotify_track_uri: b.spotifyTrackUri,
+          track_id: b.trackId,
           first_play_month: b.firstPlayMonth,
         }));
         await trx('track_first_play').insert(batch);
@@ -112,18 +112,6 @@ export class PostgresStreamEntryRepository implements StreamEntryRepository {
         await trx('monthly_listen_totals').insert(batch);
       }
 
-      // Monthly stamina
-      for (let i = 0; i < data.staminaBuckets.length; i += BATCH_INSERT_SIZE) {
-        const batch = data.staminaBuckets.slice(i, i + BATCH_INSERT_SIZE).map(b => ({
-          session_id: sessionId,
-          month: b.month,
-          day_of_week: b.dayOfWeek,
-          hour_of_day: b.hourOfDay,
-          total_chain_length: b.totalChainLength,
-          chain_count: b.chainCount,
-        }));
-        await trx('monthly_stamina').insert(batch);
-      }
     });
   }
 
@@ -158,16 +146,17 @@ export class PostgresStreamEntryRepository implements StreamEntryRepository {
   }
 
   async getTopArtists(sessionId: string, filters: StatsFilter): Promise<ArtistStatRow[]> {
-    const query = this.db('monthly_artist_stats')
-      .where('session_id', sessionId)
+    const query = this.db('monthly_artist_stats as a')
+      .join('artist_catalog as ac', 'a.artist_id', 'ac.id')
+      .where('a.session_id', sessionId)
       .select(
-        this.db.raw('artist_name as "artistName"'),
-        this.db.raw('SUM(play_count)::integer as "playCount"'),
-        this.db.raw('SUM(ms_played)::bigint as "totalMs"'),
+        this.db.raw('ac.artist_name as "artistName"'),
+        this.db.raw('SUM(a.play_count)::integer as "playCount"'),
+        this.db.raw('SUM(a.ms_played)::bigint as "totalMs"'),
       )
-      .groupBy('artist_name');
+      .groupBy('a.artist_id', 'ac.artist_name');
 
-    this.applyMonthFilters(query, filters);
+    this.applyMonthFilters(query, filters, 'a');
 
     const sortCol = filters.sort === 'count' ? '"playCount"' : '"totalMs"';
     query.orderByRaw(`${sortCol} DESC`);
@@ -177,17 +166,18 @@ export class PostgresStreamEntryRepository implements StreamEntryRepository {
   }
 
   async getTopTracks(sessionId: string, filters: StatsFilter): Promise<TrackStatRow[]> {
-    const query = this.db('monthly_track_stats')
-      .where('session_id', sessionId)
+    const query = this.db('monthly_track_stats as t')
+      .join('track_catalog as tc', 't.track_id', 'tc.id')
+      .where('t.session_id', sessionId)
       .select(
-        this.db.raw('track_name as "trackName"'),
-        this.db.raw('artist_name as "artistName"'),
-        this.db.raw('SUM(play_count)::integer as "playCount"'),
-        this.db.raw('SUM(ms_played)::bigint as "totalMs"'),
+        this.db.raw('tc.track_name as "trackName"'),
+        this.db.raw('tc.artist_name as "artistName"'),
+        this.db.raw('SUM(t.play_count)::integer as "playCount"'),
+        this.db.raw('SUM(t.ms_played)::bigint as "totalMs"'),
       )
-      .groupBy('track_name', 'artist_name');
+      .groupBy('t.track_id', 'tc.track_name', 'tc.artist_name');
 
-    this.applyMonthFilters(query, filters);
+    this.applyMonthFilters(query, filters, 't');
 
     const sortCol = filters.sort === 'count' ? '"playCount"' : '"totalMs"';
     query.orderByRaw(`${sortCol} DESC`);
@@ -212,7 +202,7 @@ export class PostgresStreamEntryRepository implements StreamEntryRepository {
   }
 
   async getHeatmap(sessionId: string, filters: StatsFilter): Promise<HeatmapRow[]> {
-    const query = this.db('monthly_heatmap')
+    const query = this.db('monthly_hourly_stats')
       .where('session_id', sessionId)
       .select(
         this.db.raw('day_of_week as "dayOfWeek"'),
@@ -231,53 +221,50 @@ export class PostgresStreamEntryRepository implements StreamEntryRepository {
     limit: number,
     filters: StatsFilter,
   ): Promise<{ periods: string[]; artists: Array<{ name: string; values: number[] }> }> {
-    // First get top N artists overall
-    const topArtists = await this.db('monthly_artist_stats')
-      .where('session_id', sessionId)
-      .select('artist_name')
-      .sum('ms_played as total')
-      .groupBy('artist_name')
+    // Step 1: top N artists
+    const topArtistsQuery = this.db('monthly_artist_stats as a')
+      .join('artist_catalog as ac', 'a.artist_id', 'ac.id')
+      .where('a.session_id', sessionId)
+      .select('a.artist_id', this.db.raw('ac.artist_name'))
+      .sum('a.ms_played as total')
+      .groupBy('a.artist_id', 'ac.artist_name')
       .orderBy('total', 'desc')
       .limit(limit);
 
-    const artistNames = (topArtists as Array<{ artist_name: string }>).map(r => r.artist_name);
+    this.applyMonthFilters(topArtistsQuery, filters, 'a');
+    const topArtists = await topArtistsQuery as Array<{ artist_id: number; artist_name: string }>;
+    const artistIds = topArtists.map(r => r.artist_id);
 
-    if (artistNames.length === 0) {
-      return { periods: [], artists: [] };
-    }
+    if (artistIds.length === 0) return { periods: [], artists: [] };
 
-    // Then get monthly data for those artists
-    const query = this.db('monthly_artist_stats')
-      .where('session_id', sessionId)
-      .whereIn('artist_name', artistNames)
+    // Step 2: monthly data for those artists
+    const query = this.db('monthly_artist_stats as a')
+      .where('a.session_id', sessionId)
+      .whereIn('a.artist_id', artistIds)
       .select(
-        this.db.raw("to_char(month, 'YYYY-MM') as period"),
-        'artist_name',
-        this.db.raw('ms_played as total_ms'),
+        this.db.raw("to_char(a.month, 'YYYY-MM') as period"),
+        'a.artist_id',
+        this.db.raw('a.ms_played as total_ms'),
       )
-      .orderBy('month');
+      .orderBy('a.month');
 
-    this.applyMonthFilters(query, filters);
+    this.applyMonthFilters(query, filters, 'a');
+    const rows: Array<{ period: string; artist_id: number; total_ms: string }> = await query;
 
-    const rows: Array<{ period: string; artist_name: string; total_ms: string }> = await query;
-
-    // Pivot into the response format
+    // Pivot
     const periodSet = new Set<string>();
-    const artistMap = new Map<string, Map<string, number>>();
-
-    for (const name of artistNames) {
-      artistMap.set(name, new Map());
-    }
+    const artistMap = new Map<number, Map<string, number>>();
+    for (const id of artistIds) artistMap.set(id, new Map());
 
     for (const row of rows) {
       periodSet.add(row.period);
-      artistMap.get(row.artist_name)?.set(row.period, Number(row.total_ms));
+      artistMap.get(row.artist_id)?.set(row.period, Number(row.total_ms));
     }
 
     const periods = Array.from(periodSet).sort();
-    const artists = artistNames.map(name => ({
-      name,
-      values: periods.map(p => artistMap.get(name)?.get(p) ?? 0),
+    const artists = topArtists.map(({ artist_id, artist_name }) => ({
+      name: artist_name,
+      values: periods.map(p => artistMap.get(artist_id)?.get(p) ?? 0),
     }));
 
     return { periods, artists };
@@ -292,9 +279,8 @@ export class PostgresStreamEntryRepository implements StreamEntryRepository {
       FROM monthly_track_stats t
       JOIN track_first_play fp
         ON t.session_id = fp.session_id
-        AND t.spotify_track_uri = fp.spotify_track_uri
+        AND t.track_id = fp.track_id
       WHERE t.session_id = ?
-        AND t.spotify_track_uri IS NOT NULL
         ${filters.from ? "AND t.month >= date_trunc('month', ?::date)" : ""}
         ${filters.to ? "AND t.month <= date_trunc('month', ?::date)" : ""}
       GROUP BY t.month
@@ -316,18 +302,19 @@ export class PostgresStreamEntryRepository implements StreamEntryRepository {
   async getSkippedTracks(sessionId: string, limit: number): Promise<SkippedRow[]> {
     const sql = `
       SELECT
-        track_name,
-        artist_name,
-        SUM(skip_count)::integer                                                   AS skip_count,
-        SUM(play_count)::integer                                                   AS total_plays,
-        ROUND(SUM(skip_count) * 100.0 / NULLIF(SUM(play_count), 0), 1)            AS skip_rate,
-        ROUND(SUM(ms_played)::numeric / NULLIF(SUM(play_count), 0) / 1000.0, 1)   AS avg_listen_sec
-      FROM monthly_track_stats
-      WHERE session_id = ?
-        AND skip_count > 0
-      GROUP BY track_name, artist_name
-      HAVING SUM(skip_count) >= 3
-      ORDER BY SUM(skip_count) DESC
+        tc.track_name,
+        tc.artist_name,
+        SUM(t.skip_count)::integer                                                   AS skip_count,
+        SUM(t.play_count)::integer                                                   AS total_plays,
+        ROUND(SUM(t.skip_count) * 100.0 / NULLIF(SUM(t.play_count), 0), 1)          AS skip_rate,
+        ROUND(SUM(t.ms_played)::numeric / NULLIF(SUM(t.play_count), 0) / 1000.0, 1) AS avg_listen_sec
+      FROM monthly_track_stats t
+      JOIN track_catalog tc ON t.track_id = tc.id
+      WHERE t.session_id = ?
+        AND t.skip_count > 0
+      GROUP BY t.track_id, tc.track_name, tc.artist_name
+      HAVING SUM(t.skip_count) >= 3
+      ORDER BY SUM(t.skip_count) DESC
       LIMIT ?
     `;
     const result = await this.db.raw(sql, [sessionId, limit]);
@@ -352,16 +339,18 @@ export class PostgresStreamEntryRepository implements StreamEntryRepository {
     const sql = `
       WITH qualified AS (
         SELECT
-          artist_name,
-          SUM(play_count)::integer AS total_plays,
-          SUM(skip_count)::integer AS total_skips,
-          ROUND(SUM(skip_count) * 100.0 / NULLIF(SUM(play_count), 0), 1) AS skip_rate
-        FROM monthly_artist_stats
-        WHERE session_id = ?
-          ${filters.from ? "AND month >= date_trunc('month', ?::date)" : ''}
-          ${filters.to ? "AND month <= date_trunc('month', ?::date)" : ''}
-        GROUP BY artist_name
-        HAVING SUM(play_count) >= 100
+          a.artist_id,
+          ac.artist_name,
+          SUM(a.play_count)::integer AS total_plays,
+          SUM(a.skip_count)::integer AS total_skips,
+          ROUND(SUM(a.skip_count) * 100.0 / NULLIF(SUM(a.play_count), 0), 1) AS skip_rate
+        FROM monthly_artist_stats a
+        JOIN artist_catalog ac ON a.artist_id = ac.id
+        WHERE a.session_id = ?
+          ${filters.from ? "AND a.month >= date_trunc('month', ?::date)" : ''}
+          ${filters.to ? "AND a.month <= date_trunc('month', ?::date)" : ''}
+        GROUP BY a.artist_id, ac.artist_name
+        HAVING SUM(a.play_count) >= 100
       ),
       ranked AS (
         SELECT *,
@@ -393,70 +382,64 @@ export class PostgresStreamEntryRepository implements StreamEntryRepository {
     limit: number,
     filters: StatsFilter,
   ): Promise<{ periods: string[]; artists: Array<{ name: string; values: number[] }> }> {
-    // Step 1: find the top N artists by total ms_played within the optional filter range
-    const topArtistsQuery = this.db('monthly_artist_stats')
-      .where('session_id', sessionId)
-      .select('artist_name')
-      .sum('ms_played as total')
-      .groupBy('artist_name')
+    const topArtistsQuery = this.db('monthly_artist_stats as a')
+      .join('artist_catalog as ac', 'a.artist_id', 'ac.id')
+      .where('a.session_id', sessionId)
+      .select('a.artist_id', this.db.raw('ac.artist_name'))
+      .sum('a.ms_played as total')
+      .groupBy('a.artist_id', 'ac.artist_name')
       .orderBy('total', 'desc')
       .limit(limit);
 
-    this.applyMonthFilters(topArtistsQuery, filters);
-    const topArtists = await topArtistsQuery as Array<{ artist_name: string }>;
-    const artistNames = topArtists.map(r => r.artist_name);
+    this.applyMonthFilters(topArtistsQuery, filters, 'a');
+    const topArtists = await topArtistsQuery as Array<{ artist_id: number; artist_name: string }>;
+    const artistIds = topArtists.map(r => r.artist_id);
 
-    if (artistNames.length === 0) return { periods: [], artists: [] };
+    if (artistIds.length === 0) return { periods: [], artists: [] };
 
-    // Step 2: compute cumulative ms_played per artist over time using a window function
     const sql = `
       SELECT
         to_char(month, 'YYYY-MM') AS period,
-        artist_name,
+        artist_id,
         SUM(ms_played) OVER (
-          PARTITION BY artist_name
+          PARTITION BY artist_id
           ORDER BY month
           ROWS UNBOUNDED PRECEDING
         ) AS cumulative_ms
       FROM monthly_artist_stats
       WHERE session_id = ?
-        AND artist_name = ANY(?)
+        AND artist_id = ANY(?)
         ${filters.from ? "AND month >= date_trunc('month', ?::date)" : ''}
         ${filters.to ? "AND month <= date_trunc('month', ?::date)" : ''}
-      ORDER BY month, artist_name
+      ORDER BY month, artist_id
     `;
 
-    const bindings: unknown[] = [sessionId, artistNames];
+    const bindings: unknown[] = [sessionId, artistIds];
     if (filters.from) bindings.push(filters.from);
     if (filters.to) bindings.push(filters.to);
 
     const result = await this.db.raw(sql, bindings);
-    const rows: Array<{ period: string; artist_name: string; cumulative_ms: string }> = result.rows;
+    const rows: Array<{ period: string; artist_id: number; cumulative_ms: string }> = result.rows;
 
-    // Step 3: pivot into {periods, artists} — carry forward last known value for gap months
     const periodSet = new Set<string>();
-    const artistMap = new Map<string, Map<string, number>>();
-
-    for (const name of artistNames) {
-      artistMap.set(name, new Map());
-    }
+    const artistMap = new Map<number, Map<string, number>>();
+    for (const { artist_id } of topArtists) artistMap.set(artist_id, new Map());
 
     for (const row of rows) {
       periodSet.add(row.period);
-      artistMap.get(row.artist_name)?.set(row.period, Number(row.cumulative_ms));
+      artistMap.get(row.artist_id)?.set(row.period, Number(row.cumulative_ms));
     }
 
     const periods = Array.from(periodSet).sort();
-
-    const artists = artistNames.map(name => {
-      const monthMap = artistMap.get(name)!;
+    const artists = topArtists.map(({ artist_id, artist_name }) => {
+      const monthMap = artistMap.get(artist_id)!;
       let lastVal = 0;
       const values = periods.map(p => {
         const val = monthMap.get(p);
         if (val !== undefined) lastVal = val;
         return lastVal;
       });
-      return { name, values };
+      return { name: artist_name, values };
     });
 
     return { periods, artists };
@@ -467,62 +450,56 @@ export class PostgresStreamEntryRepository implements StreamEntryRepository {
     limit: number,
     filters: StatsFilter,
   ): Promise<{ periods: string[]; tracks: Array<{ name: string; artistName: string; values: number[] }> }> {
-    // Step 1: find top N tracks by total ms_played
-    const topTracksQuery = this.db('monthly_track_stats')
-      .where('session_id', sessionId)
-      .select('track_name', 'artist_name')
-      .sum('ms_played as total')
-      .groupBy('track_name', 'artist_name')
+    // Step 1: top N tracks
+    const topTracksQuery = this.db('monthly_track_stats as t')
+      .join('track_catalog as tc', 't.track_id', 'tc.id')
+      .where('t.session_id', sessionId)
+      .select('t.track_id', this.db.raw('tc.track_name'), this.db.raw('tc.artist_name'))
+      .sum('t.ms_played as total')
+      .groupBy('t.track_id', 'tc.track_name', 'tc.artist_name')
       .orderBy('total', 'desc')
       .limit(limit);
 
-    this.applyMonthFilters(topTracksQuery, filters);
-    const topTracks = await topTracksQuery as Array<{ track_name: string; artist_name: string }>;
+    this.applyMonthFilters(topTracksQuery, filters, 't');
+    const topTracks = await topTracksQuery as Array<{ track_id: number; track_name: string; artist_name: string }>;
 
     if (topTracks.length === 0) return { periods: [], tracks: [] };
+    const trackIds = topTracks.map(r => r.track_id);
 
-    // Step 2: get monthly data for those tracks
+    // Step 2: monthly data
     const sql = `
       SELECT
-        to_char(month, 'YYYY-MM') AS period,
-        track_name,
-        artist_name,
-        ms_played AS total_ms
-      FROM monthly_track_stats
-      WHERE session_id = ?
-        AND (track_name, artist_name) = ANY(SELECT * FROM unnest(?::text[], ?::text[]))
-        ${filters.from ? "AND month >= date_trunc('month', ?::date)" : ''}
-        ${filters.to   ? "AND month <= date_trunc('month', ?::date)" : ''}
-      ORDER BY month
+        to_char(t.month, 'YYYY-MM') AS period,
+        t.track_id,
+        t.ms_played AS total_ms
+      FROM monthly_track_stats t
+      WHERE t.session_id = ?
+        AND t.track_id = ANY(?)
+        ${filters.from ? "AND t.month >= date_trunc('month', ?::date)" : ''}
+        ${filters.to   ? "AND t.month <= date_trunc('month', ?::date)" : ''}
+      ORDER BY t.month
     `;
-
-    const trackNames = topTracks.map(r => r.track_name);
-    const artistNames = topTracks.map(r => r.artist_name);
-    const bindings: unknown[] = [sessionId, trackNames, artistNames];
+    const bindings: unknown[] = [sessionId, trackIds];
     if (filters.from) bindings.push(filters.from);
     if (filters.to) bindings.push(filters.to);
 
     const result = await this.db.raw(sql, bindings);
-    const rows: Array<{ period: string; track_name: string; artist_name: string; total_ms: string }> = result.rows;
+    const rows: Array<{ period: string; track_id: number; total_ms: string }> = result.rows;
 
-    // Pivot into response format
     const periodSet = new Set<string>();
-    const trackMap = new Map<string, Map<string, number>>();
-
-    for (const t of topTracks) {
-      trackMap.set(`${t.track_name}\0${t.artist_name}`, new Map());
-    }
+    const trackMap = new Map<number, Map<string, number>>();
+    for (const t of topTracks) trackMap.set(t.track_id, new Map());
 
     for (const row of rows) {
       periodSet.add(row.period);
-      trackMap.get(`${row.track_name}\0${row.artist_name}`)?.set(row.period, Number(row.total_ms));
+      trackMap.get(row.track_id)?.set(row.period, Number(row.total_ms));
     }
 
     const periods = Array.from(periodSet).sort();
-    const tracks = topTracks.map(t => ({
-      name: t.track_name,
-      artistName: t.artist_name,
-      values: periods.map(p => trackMap.get(`${t.track_name}\0${t.artist_name}`)?.get(p) ?? 0),
+    const tracks = topTracks.map(({ track_id, track_name, artist_name }) => ({
+      name: track_name,
+      artistName: artist_name,
+      values: periods.map(p => trackMap.get(track_id)?.get(p) ?? 0),
     }));
 
     return { periods, tracks };
@@ -533,73 +510,64 @@ export class PostgresStreamEntryRepository implements StreamEntryRepository {
     limit: number,
     filters: StatsFilter,
   ): Promise<{ periods: string[]; tracks: Array<{ name: string; artistName: string; values: number[] }> }> {
-    // Step 1: find top N tracks by total ms_played within the optional filter range
-    const topTracksQuery = this.db('monthly_track_stats')
-      .where('session_id', sessionId)
-      .select('track_name', 'artist_name')
-      .sum('ms_played as total')
-      .groupBy('track_name', 'artist_name')
+    const topTracksQuery = this.db('monthly_track_stats as t')
+      .join('track_catalog as tc', 't.track_id', 'tc.id')
+      .where('t.session_id', sessionId)
+      .select('t.track_id', this.db.raw('tc.track_name'), this.db.raw('tc.artist_name'))
+      .sum('t.ms_played as total')
+      .groupBy('t.track_id', 'tc.track_name', 'tc.artist_name')
       .orderBy('total', 'desc')
       .limit(limit);
 
-    this.applyMonthFilters(topTracksQuery, filters);
-    const topTracks = await topTracksQuery as Array<{ track_name: string; artist_name: string }>;
+    this.applyMonthFilters(topTracksQuery, filters, 't');
+    const topTracks = await topTracksQuery as Array<{ track_id: number; track_name: string; artist_name: string }>;
 
     if (topTracks.length === 0) return { periods: [], tracks: [] };
+    const trackIds = topTracks.map(r => r.track_id);
 
-    // Step 2: cumulative ms_played per track using a window function
     const sql = `
       SELECT
         to_char(month, 'YYYY-MM') AS period,
-        track_name,
-        artist_name,
+        track_id,
         SUM(ms_played) OVER (
-          PARTITION BY track_name, artist_name
+          PARTITION BY track_id
           ORDER BY month
           ROWS UNBOUNDED PRECEDING
         ) AS cumulative_ms
       FROM monthly_track_stats
       WHERE session_id = ?
-        AND (track_name, artist_name) = ANY(SELECT * FROM unnest(?::text[], ?::text[]))
+        AND track_id = ANY(?)
         ${filters.from ? "AND month >= date_trunc('month', ?::date)" : ''}
         ${filters.to   ? "AND month <= date_trunc('month', ?::date)" : ''}
-      ORDER BY month, track_name, artist_name
+      ORDER BY month, track_id
     `;
 
-    const trackNames = topTracks.map(r => r.track_name);
-    const artistNames = topTracks.map(r => r.artist_name);
-    const bindings: unknown[] = [sessionId, trackNames, artistNames];
+    const bindings: unknown[] = [sessionId, trackIds];
     if (filters.from) bindings.push(filters.from);
     if (filters.to) bindings.push(filters.to);
 
     const result = await this.db.raw(sql, bindings);
-    const rows: Array<{ period: string; track_name: string; artist_name: string; cumulative_ms: string }> = result.rows;
+    const rows: Array<{ period: string; track_id: number; cumulative_ms: string }> = result.rows;
 
-    // Pivot — carry forward last known value for gap months
     const periodSet = new Set<string>();
-    const trackMap = new Map<string, Map<string, number>>();
-
-    for (const t of topTracks) {
-      trackMap.set(`${t.track_name}\0${t.artist_name}`, new Map());
-    }
+    const trackMap = new Map<number, Map<string, number>>();
+    for (const { track_id } of topTracks) trackMap.set(track_id, new Map());
 
     for (const row of rows) {
       periodSet.add(row.period);
-      trackMap.get(`${row.track_name}\0${row.artist_name}`)?.set(row.period, Number(row.cumulative_ms));
+      trackMap.get(row.track_id)?.set(row.period, Number(row.cumulative_ms));
     }
 
     const periods = Array.from(periodSet).sort();
-
-    const tracks = topTracks.map(t => {
-      const key = `${t.track_name}\0${t.artist_name}`;
-      const monthMap = trackMap.get(key)!;
+    const tracks = topTracks.map(({ track_id, track_name, artist_name }) => {
+      const monthMap = trackMap.get(track_id)!;
       let lastVal = 0;
       const values = periods.map(p => {
         const val = monthMap.get(p);
         if (val !== undefined) lastVal = val;
         return lastVal;
       });
-      return { name: t.track_name, artistName: t.artist_name, values };
+      return { name: track_name, artistName: artist_name, values };
     });
 
     return { periods, tracks };
@@ -608,17 +576,18 @@ export class PostgresStreamEntryRepository implements StreamEntryRepository {
   async getBackButtonTracks(sessionId: string, limit: number): Promise<BackButtonRow[]> {
     const sql = `
       SELECT
-        track_name,
-        artist_name,
-        SUM(back_count)::integer                                                    AS back_count,
-        SUM(play_count)::integer                                                    AS total_plays,
-        ROUND(SUM(back_count) * 100.0 / NULLIF(SUM(play_count), 0), 1)             AS replay_rate
-      FROM monthly_track_stats
-      WHERE session_id = ?
-        AND back_count > 0
-      GROUP BY track_name, artist_name
-      HAVING SUM(back_count) >= 2
-      ORDER BY SUM(back_count) DESC
+        tc.track_name,
+        tc.artist_name,
+        SUM(t.back_count)::integer                                                    AS back_count,
+        SUM(t.play_count)::integer                                                    AS total_plays,
+        ROUND(SUM(t.back_count) * 100.0 / NULLIF(SUM(t.play_count), 0), 1)           AS replay_rate
+      FROM monthly_track_stats t
+      JOIN track_catalog tc ON t.track_id = tc.id
+      WHERE t.session_id = ?
+        AND t.back_count > 0
+      GROUP BY t.track_id, tc.track_name, tc.artist_name
+      HAVING SUM(t.back_count) >= 2
+      ORDER BY SUM(t.back_count) DESC
       LIMIT ?
     `;
     const result = await this.db.raw(sql, [sessionId, limit]);
@@ -670,15 +639,17 @@ export class PostgresStreamEntryRepository implements StreamEntryRepository {
     const sql = `
       WITH monthly_top AS (
         SELECT
-          month,
-          artist_name,
-          SUM(ms_played) AS artist_ms,
-          ROW_NUMBER() OVER (PARTITION BY month ORDER BY SUM(ms_played) DESC) AS rn
-        FROM monthly_artist_stats
-        WHERE session_id = ?
-          ${filters.from ? "AND month >= date_trunc('month', ?::date)" : ''}
-          ${filters.to   ? "AND month <= date_trunc('month', ?::date)" : ''}
-        GROUP BY month, artist_name
+          a.month,
+          a.artist_id,
+          ac.artist_name,
+          SUM(a.ms_played) AS artist_ms,
+          ROW_NUMBER() OVER (PARTITION BY a.month ORDER BY SUM(a.ms_played) DESC) AS rn
+        FROM monthly_artist_stats a
+        JOIN artist_catalog ac ON a.artist_id = ac.id
+        WHERE a.session_id = ?
+          ${filters.from ? "AND a.month >= date_trunc('month', ?::date)" : ''}
+          ${filters.to   ? "AND a.month <= date_trunc('month', ?::date)" : ''}
+        GROUP BY a.month, a.artist_id, ac.artist_name
       ),
       monthly_totals AS (
         SELECT
@@ -728,7 +699,7 @@ export class PostgresStreamEntryRepository implements StreamEntryRepository {
         hour_of_day,
         SUM(total_chain_length)::integer AS total_chain_length,
         SUM(chain_count)::integer        AS chain_count
-      FROM monthly_stamina
+      FROM monthly_hourly_stats
       WHERE session_id = ?
         ${filters.from ? "AND month >= date_trunc('month', ?::date)" : ''}
         ${filters.to   ? "AND month <= date_trunc('month', ?::date)" : ''}
@@ -751,22 +722,23 @@ export class PostgresStreamEntryRepository implements StreamEntryRepository {
   async getArtistIntent(sessionId: string, filters: StatsFilter): Promise<ArtistIntentRow[]> {
     const sql = `
       SELECT
-        artist_name,
-        SUM(play_count)::integer                                                          AS total_plays,
-        SUM(deliberate_count)::integer                                                    AS deliberate_plays,
-        SUM(served_count)::integer                                                        AS served_plays,
+        ac.artist_name,
+        SUM(a.play_count)::integer                                                          AS total_plays,
+        SUM(a.deliberate_count)::integer                                                    AS deliberate_plays,
+        SUM(a.served_count)::integer                                                        AS served_plays,
         ROUND(
-          SUM(deliberate_count) * 100.0
-            / NULLIF(SUM(deliberate_count) + SUM(served_count), 0),
+          SUM(a.deliberate_count) * 100.0
+            / NULLIF(SUM(a.deliberate_count) + SUM(a.served_count), 0),
           1
-        )                                                                                 AS deliberate_rate
-      FROM monthly_artist_stats
-      WHERE session_id = ?
-        ${filters.from ? "AND month >= date_trunc('month', ?::date)" : ''}
-        ${filters.to   ? "AND month <= date_trunc('month', ?::date)" : ''}
-      GROUP BY artist_name
-      HAVING SUM(play_count) >= 20
-        AND (SUM(deliberate_count) + SUM(served_count)) > 0
+        )                                                                                   AS deliberate_rate
+      FROM monthly_artist_stats a
+      JOIN artist_catalog ac ON a.artist_id = ac.id
+      WHERE a.session_id = ?
+        ${filters.from ? "AND a.month >= date_trunc('month', ?::date)" : ''}
+        ${filters.to   ? "AND a.month <= date_trunc('month', ?::date)" : ''}
+      GROUP BY a.artist_id, ac.artist_name
+      HAVING SUM(a.play_count) >= 20
+        AND (SUM(a.deliberate_count) + SUM(a.served_count)) > 0
       ORDER BY deliberate_rate DESC
       LIMIT 50
     `;
@@ -794,23 +766,24 @@ export class PostgresStreamEntryRepository implements StreamEntryRepository {
   async getTrackIntent(sessionId: string, filters: StatsFilter, limit: number): Promise<TrackIntentRow[]> {
     const sql = `
       SELECT
-        track_name,
-        artist_name,
-        SUM(play_count)::integer                                                          AS total_plays,
-        SUM(deliberate_count)::integer                                                    AS deliberate_plays,
-        SUM(served_count)::integer                                                        AS served_plays,
+        tc.track_name,
+        tc.artist_name,
+        SUM(t.play_count)::integer                                                          AS total_plays,
+        SUM(t.deliberate_count)::integer                                                    AS deliberate_plays,
+        SUM(t.served_count)::integer                                                        AS served_plays,
         ROUND(
-          SUM(deliberate_count) * 100.0
-            / NULLIF(SUM(deliberate_count) + SUM(served_count), 0),
+          SUM(t.deliberate_count) * 100.0
+            / NULLIF(SUM(t.deliberate_count) + SUM(t.served_count), 0),
           1
-        )                                                                                 AS deliberate_rate
-      FROM monthly_track_stats
-      WHERE session_id = ?
-        ${filters.from ? "AND month >= date_trunc('month', ?::date)" : ''}
-        ${filters.to   ? "AND month <= date_trunc('month', ?::date)" : ''}
-      GROUP BY track_name, artist_name
-      HAVING SUM(play_count) >= 5
-        AND (SUM(deliberate_count) + SUM(served_count)) > 0
+        )                                                                                   AS deliberate_rate
+      FROM monthly_track_stats t
+      JOIN track_catalog tc ON t.track_id = tc.id
+      WHERE t.session_id = ?
+        ${filters.from ? "AND t.month >= date_trunc('month', ?::date)" : ''}
+        ${filters.to   ? "AND t.month <= date_trunc('month', ?::date)" : ''}
+      GROUP BY t.track_id, tc.track_name, tc.artist_name
+      HAVING SUM(t.play_count) >= 5
+        AND (SUM(t.deliberate_count) + SUM(t.served_count)) > 0
       ORDER BY deliberate_rate DESC
       LIMIT ?
     `;
@@ -839,8 +812,8 @@ export class PostgresStreamEntryRepository implements StreamEntryRepository {
   }
 
   async getPersonalityInputs(sessionId: string): Promise<PersonalityInputsRow> {
-    // 1. Hour totals from heatmap (sum across all months)
-    const heatmapRows: Array<{ hourOfDay: string; totalMs: string }> = await this.db('monthly_heatmap')
+    // 1. Hour totals from hourly stats (sum across all months)
+    const heatmapRows: Array<{ hourOfDay: string; totalMs: string }> = await this.db('monthly_hourly_stats')
       .where('session_id', sessionId)
       .select(
         this.db.raw('hour_of_day as "hourOfDay"'),
@@ -857,7 +830,7 @@ export class PostgresStreamEntryRepository implements StreamEntryRepository {
     const artistTotals: Array<{ totalMs: string }> = await this.db('monthly_artist_stats')
       .where('session_id', sessionId)
       .select(this.db.raw('SUM(ms_played)::bigint as "totalMs"'))
-      .groupBy('artist_name')
+      .groupBy('artist_id')
       .orderBy('totalMs', 'desc')
       .limit(10);
 
@@ -887,8 +860,8 @@ export class PostgresStreamEntryRepository implements StreamEntryRepository {
       ? Math.round(totalSkips / totalPlays * 1000) / 10
       : 0;
 
-    // 4. Avg chain length from stamina (overall session depth proxy)
-    const staminaAgg = await this.db('monthly_stamina')
+    // 4. Avg chain length from hourly stats (overall session depth proxy)
+    const staminaAgg = await this.db('monthly_hourly_stats')
       .where('session_id', sessionId)
       .select(
         this.db.raw('SUM(total_chain_length)::integer as "totalChainLength"'),
@@ -924,29 +897,104 @@ export class PostgresStreamEntryRepository implements StreamEntryRepository {
     return { hourTotals, top10ArtistMsPct, globalSkipRate, avgChainLength, shuffleRate, uniqueArtistCount };
   }
 
-  private applyMonthFilters(query: Knex.QueryBuilder, filters: StatsFilter): void {
+  async upsertArtistCatalog(artists: Array<{ artistName: string }>): Promise<Map<string, number>> {
+    if (artists.length === 0) return new Map();
+
+    const values = artists.map(a => a.artistName);
+    await this.db.raw(
+      `INSERT INTO artist_catalog (artist_name)
+       SELECT unnest(?::text[])
+       ON CONFLICT (artist_name) DO NOTHING`,
+      [values],
+    );
+
+    const rows: Array<{ id: number; artist_name: string }> = await this.db('artist_catalog')
+      .whereIn('artist_name', values)
+      .select('id', 'artist_name');
+
+    const map = new Map<string, number>();
+    for (const r of rows) {
+      map.set(r.artist_name, r.id);
+    }
+    return map;
+  }
+
+  async upsertTrackCatalog(
+    tracks: Array<{ trackName: string; artistName: string; albumName: string | null; spotifyTrackUri: string | null }>,
+    artistIdMap: Map<string, number>,
+  ): Promise<Map<string, number>> {
+    if (tracks.length === 0) return new Map();
+
+    // Deduplicate by (trackName, artistName) — Postgres ON CONFLICT DO UPDATE
+    // cannot handle the same conflict key twice in a single INSERT statement.
+    const seen = new Set<string>();
+    const uniqueTracks = tracks.filter(t => {
+      const key = `${t.trackName}\0${t.artistName}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+
+    for (let i = 0; i < uniqueTracks.length; i += BATCH_INSERT_SIZE) {
+      const batch = uniqueTracks.slice(i, i + BATCH_INSERT_SIZE);
+      const trackNames = batch.map(t => t.trackName);
+      const artistNames = batch.map(t => t.artistName);
+      const artistIds = batch.map(t => artistIdMap.get(t.artistName) ?? 0);
+      const albumNames = batch.map(t => t.albumName);
+      const spotifyUris = batch.map(t => t.spotifyTrackUri);
+
+      await this.db.raw(
+        `INSERT INTO track_catalog (track_name, artist_name, artist_id, album_name, spotify_track_uri)
+         SELECT * FROM unnest(
+           ?::text[], ?::text[], ?::integer[], ?::text[], ?::text[]
+         ) AS t(track_name, artist_name, artist_id, album_name, spotify_track_uri)
+         ON CONFLICT (track_name, artist_name) DO UPDATE
+           SET album_name         = COALESCE(EXCLUDED.album_name, track_catalog.album_name),
+               spotify_track_uri  = COALESCE(EXCLUDED.spotify_track_uri, track_catalog.spotify_track_uri)`,
+        [trackNames, artistNames, artistIds, albumNames, spotifyUris],
+      );
+    }
+
+    const trackNames = uniqueTracks.map(t => t.trackName);
+    const artistNames = uniqueTracks.map(t => t.artistName);
+    const rows: { rows: Array<{ id: number; track_name: string; artist_name: string }> } = await this.db.raw(
+      `SELECT id, track_name, artist_name FROM track_catalog
+       WHERE (track_name, artist_name) IN (SELECT * FROM unnest(?::text[], ?::text[]))`,
+      [trackNames, artistNames],
+    );
+
+    const map = new Map<string, number>();
+    for (const r of rows.rows) {
+      map.set(`${r.track_name}\0${r.artist_name}`, r.id);
+    }
+    return map;
+  }
+
+  private applyMonthFilters(query: Knex.QueryBuilder, filters: StatsFilter, tableAlias = ''): void {
+    const col = tableAlias ? `${tableAlias}.month` : 'month';
     if (filters.from) {
-      query.whereRaw("month >= date_trunc('month', ?::date)", [filters.from]);
+      query.whereRaw(`${col} >= date_trunc('month', ?::date)`, [filters.from]);
     }
     if (filters.to) {
-      query.whereRaw("month <= date_trunc('month', ?::date)", [filters.to]);
+      query.whereRaw(`${col} <= date_trunc('month', ?::date)`, [filters.to]);
     }
   }
 
   async getShuffleSerendipity(sessionId: string, limit: number): Promise<ShuffleSerendipityRow[]> {
     const sql = `
       SELECT
-        track_name,
-        artist_name,
-        SUM(shuffle_play_count)::integer                                                      AS shuffle_plays,
-        SUM(play_count)::integer                                                              AS total_plays,
-        ROUND(SUM(shuffle_trackdone_count) * 100.0 / NULLIF(SUM(shuffle_play_count), 0), 1) AS completion_rate
-      FROM monthly_track_stats
-      WHERE session_id = ?
-      GROUP BY track_name, artist_name
-      HAVING SUM(play_count) > 0
-        AND SUM(play_count) = SUM(shuffle_play_count)
-        AND SUM(shuffle_play_count) >= 3
+        tc.track_name,
+        tc.artist_name,
+        SUM(t.shuffle_play_count)::integer                                                      AS shuffle_plays,
+        SUM(t.play_count)::integer                                                              AS total_plays,
+        ROUND(SUM(t.shuffle_trackdone_count) * 100.0 / NULLIF(SUM(t.shuffle_play_count), 0), 1) AS completion_rate
+      FROM monthly_track_stats t
+      JOIN track_catalog tc ON t.track_id = tc.id
+      WHERE t.session_id = ?
+      GROUP BY t.track_id, tc.track_name, tc.artist_name
+      HAVING SUM(t.play_count) > 0
+        AND SUM(t.play_count) = SUM(t.shuffle_play_count)
+        AND SUM(t.shuffle_play_count) >= 3
       ORDER BY completion_rate DESC, shuffle_plays DESC
       LIMIT ?
     `;
@@ -969,48 +1017,42 @@ export class PostgresStreamEntryRepository implements StreamEntryRepository {
   async getIntroTestTracks(sessionId: string, limit: number): Promise<IntroTestRow[]> {
     const sql = `
       WITH first_completion AS (
-        -- The earliest month where you actually finished the track
         SELECT
-          track_name,
-          artist_name,
+          track_id,
           MIN(month) AS first_completion_month
         FROM monthly_track_stats
         WHERE session_id = ?
           AND trackdone_count > 0
-        GROUP BY track_name, artist_name
+        GROUP BY track_id
       ),
       pre_bails AS (
-        -- Short plays that happened in months BEFORE the first completion
         SELECT
-          t.track_name,
-          t.artist_name,
+          t.track_id,
           SUM(t.short_play_count)::integer AS pre_completion_bails
         FROM monthly_track_stats t
-        JOIN first_completion fc
-          ON t.track_name = fc.track_name
-         AND t.artist_name = fc.artist_name
+        JOIN first_completion fc ON t.track_id = fc.track_id
         WHERE t.session_id = ?
           AND t.month < fc.first_completion_month
-        GROUP BY t.track_name, t.artist_name
+        GROUP BY t.track_id
       ),
       totals AS (
         SELECT
-          track_name,
-          artist_name,
+          track_id,
           SUM(play_count)::integer      AS total_plays,
           SUM(trackdone_count)::integer AS completion_count
         FROM monthly_track_stats
         WHERE session_id = ?
-        GROUP BY track_name, artist_name
+        GROUP BY track_id
       )
       SELECT
-        p.track_name,
-        p.artist_name,
+        tc.track_name,
+        tc.artist_name,
         t.total_plays,
         p.pre_completion_bails AS short_play_count,
         t.completion_count
       FROM pre_bails p
-      JOIN totals t ON t.track_name = p.track_name AND t.artist_name = p.artist_name
+      JOIN totals t ON t.track_id = p.track_id
+      JOIN track_catalog tc ON tc.id = p.track_id
       WHERE p.pre_completion_bails >= 3
       ORDER BY p.pre_completion_bails DESC, t.completion_count DESC
       LIMIT ?
@@ -1035,13 +1077,15 @@ export class PostgresStreamEntryRepository implements StreamEntryRepository {
     const sql = `
       WITH top AS (
         SELECT
-          artist_name,
-          SUM(ms_played) AS total_ms
-        FROM monthly_artist_stats
-        WHERE session_id = ?
-          ${filters.from ? "AND month >= date_trunc('month', ?::date)" : ''}
-          ${filters.to   ? "AND month <= date_trunc('month', ?::date)" : ''}
-        GROUP BY artist_name
+          a.artist_id,
+          ac.artist_name,
+          SUM(a.ms_played) AS total_ms
+        FROM monthly_artist_stats a
+        JOIN artist_catalog ac ON a.artist_id = ac.id
+        WHERE a.session_id = ?
+          ${filters.from ? "AND a.month >= date_trunc('month', ?::date)" : ''}
+          ${filters.to   ? "AND a.month <= date_trunc('month', ?::date)" : ''}
+        GROUP BY a.artist_id, ac.artist_name
         ORDER BY total_ms DESC
         LIMIT 50
       )
@@ -1050,8 +1094,8 @@ export class PostgresStreamEntryRepository implements StreamEntryRepository {
         EXTRACT(YEAR FROM MIN(a.month))::integer AS discovery_year,
         top.total_ms::bigint
       FROM top
-      JOIN monthly_artist_stats a ON a.session_id = ? AND a.artist_name = top.artist_name
-      GROUP BY top.artist_name, top.total_ms
+      JOIN monthly_artist_stats a ON a.session_id = ? AND a.artist_id = top.artist_id
+      GROUP BY top.artist_id, top.artist_name, top.total_ms
       ORDER BY top.total_ms DESC
     `;
 
@@ -1069,12 +1113,12 @@ export class PostgresStreamEntryRepository implements StreamEntryRepository {
   }
 
   async getWeekdayWeekend(sessionId: string, filters: StatsFilter): Promise<WeekdayWeekendRow> {
-    // --- Hours by weekday/weekend from monthly_heatmap ---
+    // --- Hours by weekday/weekend from monthly_hourly_stats ---
     const hoursSql = `
       SELECT
         CASE WHEN day_of_week IN (0, 6) THEN 'weekend' ELSE 'weekday' END AS day_type,
         SUM(ms_played)::bigint AS total_ms
-      FROM monthly_heatmap
+      FROM monthly_hourly_stats
       WHERE session_id = ?
         ${filters.from ? "AND month >= date_trunc('month', ?::date)" : ''}
         ${filters.to   ? "AND month <= date_trunc('month', ?::date)" : ''}
@@ -1089,13 +1133,13 @@ export class PostgresStreamEntryRepository implements StreamEntryRepository {
       hoursMap.set(r.day_type, Number(r.total_ms));
     }
 
-    // --- Avg session length by weekday/weekend from monthly_stamina ---
+    // --- Avg session length by weekday/weekend from monthly_hourly_stats ---
     const staminaSql = `
       SELECT
         CASE WHEN day_of_week IN (0, 6) THEN 'weekend' ELSE 'weekday' END AS day_type,
         SUM(total_chain_length)::integer AS total_chain,
         SUM(chain_count)::integer        AS chain_count
-      FROM monthly_stamina
+      FROM monthly_hourly_stats
       WHERE session_id = ?
         ${filters.from ? "AND month >= date_trunc('month', ?::date)" : ''}
         ${filters.to   ? "AND month <= date_trunc('month', ?::date)" : ''}
@@ -1113,16 +1157,17 @@ export class PostgresStreamEntryRepository implements StreamEntryRepository {
     // --- Skip rate + top artists by weekday/weekend from monthly_artist_stats ---
     const artistSql = `
       SELECT
-        artist_name,
-        SUM(weekday_play_count)::integer AS weekday_plays,
-        SUM(weekend_play_count)::integer AS weekend_plays,
-        SUM(weekday_skip_count)::integer AS weekday_skips,
-        SUM(weekend_skip_count)::integer AS weekend_skips
-      FROM monthly_artist_stats
-      WHERE session_id = ?
-        ${filters.from ? "AND month >= date_trunc('month', ?::date)" : ''}
-        ${filters.to   ? "AND month <= date_trunc('month', ?::date)" : ''}
-      GROUP BY artist_name
+        ac.artist_name,
+        SUM(a.weekday_play_count)::integer AS weekday_plays,
+        SUM(a.weekend_play_count)::integer AS weekend_plays,
+        SUM(a.weekday_skip_count)::integer AS weekday_skips,
+        SUM(a.weekend_skip_count)::integer AS weekend_skips
+      FROM monthly_artist_stats a
+      JOIN artist_catalog ac ON a.artist_id = ac.id
+      WHERE a.session_id = ?
+        ${filters.from ? "AND a.month >= date_trunc('month', ?::date)" : ''}
+        ${filters.to   ? "AND a.month <= date_trunc('month', ?::date)" : ''}
+      GROUP BY a.artist_id, ac.artist_name
     `;
     const artistBindings: unknown[] = [sessionId];
     if (filters.from) artistBindings.push(filters.from);
@@ -1192,16 +1237,17 @@ export class PostgresStreamEntryRepository implements StreamEntryRepository {
     const sql = `
       WITH per_track AS (
         SELECT
-          artist_name,
-          track_name,
-          album_name,
-          SUM(play_count)::integer AS track_plays
-        FROM monthly_track_stats
-        WHERE session_id = ?
-          AND album_name IS NOT NULL
-          ${filters.from ? "AND month >= date_trunc('month', ?::date)" : ''}
-          ${filters.to   ? "AND month <= date_trunc('month', ?::date)" : ''}
-        GROUP BY artist_name, track_name, album_name
+          tc.artist_name,
+          tc.track_name,
+          tc.album_name,
+          SUM(t.play_count)::integer AS track_plays
+        FROM monthly_track_stats t
+        JOIN track_catalog tc ON t.track_id = tc.id
+        WHERE t.session_id = ?
+          AND tc.album_name IS NOT NULL
+          ${filters.from ? "AND t.month >= date_trunc('month', ?::date)" : ''}
+          ${filters.to   ? "AND t.month <= date_trunc('month', ?::date)" : ''}
+        GROUP BY t.track_id, tc.artist_name, tc.track_name, tc.album_name
       ),
       ranked AS (
         SELECT
@@ -1258,19 +1304,20 @@ export class PostgresStreamEntryRepository implements StreamEntryRepository {
   async getSkipGraveyard(sessionId: string, limit: number): Promise<SkipGraveyardRow[]> {
     const sql = `
       SELECT
-        track_name,
-        artist_name,
-        SUM(fwd_skip_count)::integer                                                        AS fwd_skip_count,
-        SUM(play_count)::integer                                                            AS total_plays,
-        ROUND(SUM(fwd_skip_count) * 100.0 / NULLIF(SUM(play_count), 0), 1)                AS fwd_skip_rate,
-        ROUND(SUM(ms_played)::numeric / NULLIF(SUM(fwd_skip_count), 0) / 1000.0, 1)       AS avg_listen_sec
-      FROM monthly_track_stats
-      WHERE session_id = ?
-        AND fwd_skip_count > 0
-      GROUP BY track_name, artist_name
-      HAVING SUM(fwd_skip_count) >= 3
-        AND SUM(back_count) = 0
-      ORDER BY SUM(fwd_skip_count) DESC
+        tc.track_name,
+        tc.artist_name,
+        SUM(t.fwd_skip_count)::integer                                                        AS fwd_skip_count,
+        SUM(t.play_count)::integer                                                            AS total_plays,
+        ROUND(SUM(t.fwd_skip_count) * 100.0 / NULLIF(SUM(t.play_count), 0), 1)              AS fwd_skip_rate,
+        ROUND(SUM(t.ms_played)::numeric / NULLIF(SUM(t.fwd_skip_count), 0) / 1000.0, 1)     AS avg_listen_sec
+      FROM monthly_track_stats t
+      JOIN track_catalog tc ON t.track_id = tc.id
+      WHERE t.session_id = ?
+        AND t.fwd_skip_count > 0
+      GROUP BY t.track_id, tc.track_name, tc.artist_name
+      HAVING SUM(t.fwd_skip_count) >= 3
+        AND SUM(t.back_count) = 0
+      ORDER BY SUM(t.fwd_skip_count) DESC
       LIMIT ?
     `;
     const result = await this.db.raw(sql, [sessionId, limit]);
@@ -1295,29 +1342,32 @@ export class PostgresStreamEntryRepository implements StreamEntryRepository {
     const sql = `
       WITH seasonal AS (
         SELECT
-          artist_name,
+          a.artist_id,
+          ac.artist_name,
           CASE
-            WHEN EXTRACT(MONTH FROM month) IN (12, 1, 2) THEN 'Winter'
-            WHEN EXTRACT(MONTH FROM month) IN (3, 4, 5)  THEN 'Spring'
-            WHEN EXTRACT(MONTH FROM month) IN (6, 7, 8)  THEN 'Summer'
+            WHEN EXTRACT(MONTH FROM a.month) IN (12, 1, 2) THEN 'Winter'
+            WHEN EXTRACT(MONTH FROM a.month) IN (3, 4, 5)  THEN 'Spring'
+            WHEN EXTRACT(MONTH FROM a.month) IN (6, 7, 8)  THEN 'Summer'
             ELSE 'Fall'
           END                                                      AS season,
-          SUM(play_count)::integer                                 AS season_plays,
-          COUNT(DISTINCT EXTRACT(YEAR FROM month))::integer        AS active_years
-        FROM monthly_artist_stats
-        WHERE session_id = ?
-        GROUP BY artist_name, season
+          SUM(a.play_count)::integer                               AS season_plays,
+          COUNT(DISTINCT EXTRACT(YEAR FROM a.month))::integer      AS active_years
+        FROM monthly_artist_stats a
+        JOIN artist_catalog ac ON a.artist_id = ac.id
+        WHERE a.session_id = ?
+        GROUP BY a.artist_id, ac.artist_name, season
       ),
       artist_totals AS (
         SELECT
-          artist_name,
+          artist_id,
           SUM(season_plays)    AS total_plays,
           MAX(season_plays)    AS peak_plays
         FROM seasonal
-        GROUP BY artist_name
+        GROUP BY artist_id
       ),
       peak AS (
         SELECT
+          s.artist_id,
           s.artist_name,
           s.season                                                            AS peak_season,
           s.season_plays                                                      AS peak_plays,
@@ -1325,7 +1375,7 @@ export class PostgresStreamEntryRepository implements StreamEntryRepository {
           at.total_plays,
           ROUND(s.season_plays * 100.0 / NULLIF(at.total_plays, 0), 1)      AS peak_pct
         FROM seasonal s
-        JOIN artist_totals at ON s.artist_name = at.artist_name
+        JOIN artist_totals at ON s.artist_id = at.artist_id
         WHERE s.season_plays = at.peak_plays
       )
       SELECT

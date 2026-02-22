@@ -8,10 +8,9 @@ import type {
   SessionSummary,
   MonthlyArtistBucket,
   MonthlyTrackBucket,
-  MonthlyHeatmapBucket,
+  MonthlyHourlyStatsBucket,
   TrackFirstPlay,
   MonthlyTotalBucket,
-  MonthlyStaminaBucket,
 } from '../domain/port/outbound/StreamEntryRepository.js';
 import type { TokenGenerator } from '../domain/port/outbound/TokenGenerator.js';
 import type { AggregatedStatsStore } from '../domain/port/outbound/AggregatedStatsStore.js';
@@ -70,7 +69,59 @@ export class UploadStreamingHistoryUseCase implements UploadStreamingHistory {
       session.markProcessing();
       await this.sessionRepo.save(session);
 
-      const { summary, aggregated } = this.aggregateEntries(rawEntries);
+      const { summary, aggregated, trackUriFirstPlays } = this.aggregateEntries(rawEntries);
+
+      // Upsert catalog entries and get back integer ID maps
+      const artistIdMap = await this.entryRepo.upsertArtistCatalog(
+        aggregated.artistBuckets.map(b => ({ artistName: b.artistName })),
+      );
+      const trackIdMap = await this.entryRepo.upsertTrackCatalog(
+        aggregated.trackBuckets.map(b => ({
+          trackName: b.trackName,
+          artistName: b.artistName,
+          albumName: b.albumName,
+          spotifyTrackUri: b.spotifyTrackUri,
+        })),
+        artistIdMap,
+      );
+
+      // Build URI → track_id map from track buckets (which carry the URI)
+      const uriToTrackId = new Map<string, number>();
+      for (const b of aggregated.trackBuckets) {
+        if (b.spotifyTrackUri) {
+          const tid = trackIdMap.get(`${b.trackName}\0${b.artistName}`);
+          if (tid !== undefined) uriToTrackId.set(b.spotifyTrackUri, tid);
+        }
+      }
+
+      // Attach FK IDs to all buckets
+      for (const b of aggregated.artistBuckets) {
+        b.artistId = artistIdMap.get(b.artistName) ?? 0;
+      }
+      for (const b of aggregated.trackBuckets) {
+        b.trackId = trackIdMap.get(`${b.trackName}\0${b.artistName}`) ?? 0;
+        b.artistId = artistIdMap.get(b.artistName) ?? 0;
+      }
+
+      // Build track_first_play entries using track_id.
+      // Multiple URIs can map to the same track_id — keep the earliest first-play date.
+      const firstPlayByTrackId = new Map<number, Date>();
+      for (const [uri, date] of trackUriFirstPlays) {
+        const trackId = uriToTrackId.get(uri);
+        if (trackId !== undefined) {
+          const existing = firstPlayByTrackId.get(trackId);
+          if (!existing || date < existing) {
+            firstPlayByTrackId.set(trackId, date);
+          }
+        }
+      }
+      aggregated.trackFirstPlays = [];
+      for (const [trackId, date] of firstPlayByTrackId) {
+        aggregated.trackFirstPlays.push({
+          trackId,
+          firstPlayMonth: new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), 1)),
+        });
+      }
 
       await this.entryRepo.saveAggregatedData(session.id, aggregated);
       await this.entryRepo.saveSessionSummary(session.id, summary);
@@ -96,11 +147,11 @@ export class UploadStreamingHistoryUseCase implements UploadStreamingHistory {
     }
   }
 
-  private aggregateEntries(rawEntries: SpotifyStreamEntry[]): { summary: SessionSummary; aggregated: AggregatedIngestData } {
+  private aggregateEntries(rawEntries: SpotifyStreamEntry[]): { summary: SessionSummary; aggregated: AggregatedIngestData; trackUriFirstPlays: Map<string, Date> } {
     // Accumulation maps
     const artistMonthly = new Map<string, { playCount: number; msPlayed: number; skipCount: number; deliberateCount: number; servedCount: number; weekdayPlayCount: number; weekendPlayCount: number; weekdaySkipCount: number; weekendSkipCount: number }>();
     const trackMonthly = new Map<string, { trackName: string; artistName: string; albumName: string | null; spotifyTrackUri: string | null; playCount: number; msPlayed: number; skipCount: number; backCount: number; shufflePlayCount: number; shuffleTrackdoneCount: number; deliberateCount: number; servedCount: number; shortPlayCount: number; trackdoneCount: number; fwdSkipCount: number }>();
-    const heatmapMonthly = new Map<string, number>();
+    const hourlyStatsMonthly = new Map<string, { msPlayed: number; totalChainLength: number; chainCount: number }>();
     const trackFirstPlayMap = new Map<string, Date>();
     const monthlyTotals = new Map<string, { playCount: number; msPlayed: number; podcastPlayCount: number; podcastMsPlayed: number; shuffleCount: number }>();
 
@@ -206,9 +257,14 @@ export class UploadStreamingHistoryUseCase implements UploadStreamingHistory {
         }
       }
 
-      // Heatmap monthly
+      // Hourly stats (ms_played component)
       const heatKey = `${monthStr}:${dow}:${hour}`;
-      heatmapMonthly.set(heatKey, (heatmapMonthly.get(heatKey) ?? 0) + e.ms_played);
+      const existingHourly = hourlyStatsMonthly.get(heatKey);
+      if (existingHourly) {
+        existingHourly.msPlayed += e.ms_played;
+      } else {
+        hourlyStatsMonthly.set(heatKey, { msPlayed: e.ms_played, totalChainLength: 0, chainCount: 0 });
+      }
 
       // Track first play
       if (e.spotify_track_uri) {
@@ -237,7 +293,6 @@ export class UploadStreamingHistoryUseCase implements UploadStreamingHistory {
     }
 
     // Session Stamina — detect consecutive reason_start='trackdone' chains
-    const staminaMonthly = new Map<string, { totalChainLength: number; chainCount: number }>();
     const sorted = rawEntries
       .filter(e => e.ts && e.ms_played != null)
       .sort((a, b) => new Date(a.ts).getTime() - new Date(b.ts).getTime());
@@ -249,12 +304,12 @@ export class UploadStreamingHistoryUseCase implements UploadStreamingHistory {
       const recordChain = (startTs: Date, length: number) => {
         const m = new Date(Date.UTC(startTs.getUTCFullYear(), startTs.getUTCMonth(), 1));
         const key = `${m.toISOString().slice(0, 10)}:${startTs.getUTCDay()}:${startTs.getUTCHours()}`;
-        const existing = staminaMonthly.get(key);
+        const existing = hourlyStatsMonthly.get(key);
         if (existing) {
           existing.totalChainLength += length;
           existing.chainCount++;
         } else {
-          staminaMonthly.set(key, { totalChainLength: length, chainCount: 1 });
+          hourlyStatsMonthly.set(key, { msPlayed: 0, totalChainLength: length, chainCount: 1 });
         }
       };
 
@@ -276,6 +331,7 @@ export class UploadStreamingHistoryUseCase implements UploadStreamingHistory {
       const [monthStr, artistName] = key.split('|');
       artistBuckets.push({
         month: new Date(monthStr),
+        artistId: 0, // filled by processEntries after catalog upsert
         artistName,
         playCount: val.playCount,
         msPlayed: val.msPlayed,
@@ -292,25 +348,19 @@ export class UploadStreamingHistoryUseCase implements UploadStreamingHistory {
     const trackBuckets: MonthlyTrackBucket[] = [];
     for (const [key, val] of trackMonthly) {
       const monthStr = key.split('|')[0];
-      trackBuckets.push({ month: new Date(monthStr), ...val });
+      trackBuckets.push({ month: new Date(monthStr), trackId: 0, artistId: 0, ...val });
     }
 
-    const heatmapBuckets: MonthlyHeatmapBucket[] = [];
-    for (const [key, msPlayed] of heatmapMonthly) {
+    const hourlyStatsBuckets: MonthlyHourlyStatsBucket[] = [];
+    for (const [key, val] of hourlyStatsMonthly) {
       const [monthStr, dowStr, hourStr] = key.split(':');
-      heatmapBuckets.push({
+      hourlyStatsBuckets.push({
         month: new Date(monthStr),
         dayOfWeek: Number(dowStr),
         hourOfDay: Number(hourStr),
-        msPlayed,
-      });
-    }
-
-    const trackFirstPlays: TrackFirstPlay[] = [];
-    for (const [uri, ts] of trackFirstPlayMap) {
-      trackFirstPlays.push({
-        spotifyTrackUri: uri,
-        firstPlayMonth: new Date(Date.UTC(ts.getUTCFullYear(), ts.getUTCMonth(), 1)),
+        msPlayed: val.msPlayed,
+        totalChainLength: val.totalChainLength,
+        chainCount: val.chainCount,
       });
     }
 
@@ -326,18 +376,6 @@ export class UploadStreamingHistoryUseCase implements UploadStreamingHistory {
       });
     }
 
-    const staminaBuckets: MonthlyStaminaBucket[] = [];
-    for (const [key, val] of staminaMonthly) {
-      const [monthStr, dowStr, hourStr] = key.split(':');
-      staminaBuckets.push({
-        month: new Date(monthStr),
-        dayOfWeek: Number(dowStr),
-        hourOfDay: Number(hourStr),
-        totalChainLength: val.totalChainLength,
-        chainCount: val.chainCount,
-      });
-    }
-
     const summary: SessionSummary = {
       totalMsPlayed: totalMs,
       totalEntries,
@@ -350,13 +388,13 @@ export class UploadStreamingHistoryUseCase implements UploadStreamingHistory {
 
     return {
       summary,
+      trackUriFirstPlays: trackFirstPlayMap,
       aggregated: {
         artistBuckets,
         trackBuckets,
-        heatmapBuckets,
-        trackFirstPlays,
+        hourlyStatsBuckets,
+        trackFirstPlays: [],  // filled by processEntries after catalog upsert
         monthlyTotals: monthlyTotalBuckets,
-        staminaBuckets,
       },
     };
   }

@@ -1,6 +1,8 @@
 <template>
   <!-- Floating action button — always visible -->
-  <button class="bmc-fab" @click="forceShow" aria-label="Buy me a coffee">☕</button>
+  <button class="bmc-fab" @click="forceShow" aria-label="Buy me a coffee">
+    ☕
+  </button>
 
   <!-- Modal overlay -->
   <Transition name="fade">
@@ -19,7 +21,8 @@
             rel="noopener noreferrer"
             class="bmc-btn"
             @click="dismiss"
-          >☕ Buy me a coffee</a>
+            >☕ Buy me a coffee</a
+          >
           <button class="bmc-skip" @click="dismiss">No thanks</button>
         </div>
       </Transition>
@@ -28,16 +31,14 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue';
+import { ref } from "vue";
 
-const STORAGE_KEY = 'bmc_dismissed';
+const STORAGE_KEY = "bmc_dismissed";
 
 const visible = ref(false);
 
 function show() {
-  if (!localStorage.getItem(STORAGE_KEY)) {
-    visible.value = true;
-  }
+  visible.value = true;
 }
 
 function forceShow() {
@@ -46,7 +47,6 @@ function forceShow() {
 
 function dismiss() {
   visible.value = false;
-  localStorage.setItem(STORAGE_KEY, '1');
 }
 
 defineExpose({ show });
@@ -68,7 +68,9 @@ defineExpose({ show });
   line-height: 1;
   cursor: pointer;
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.45);
-  transition: transform 0.15s, background 0.15s;
+  transition:
+    transform 0.15s,
+    background 0.15s;
   animation: bmc-shake 5s ease-in-out infinite;
 }
 
@@ -80,13 +82,28 @@ defineExpose({ show });
 
 @keyframes bmc-shake {
   /* idle for first 88%, then shake, then settle */
-  0%, 88%   { transform: rotate(0deg); }
-  90%        { transform: rotate(-14deg); }
-  92%        { transform: rotate(14deg); }
-  94%        { transform: rotate(-10deg); }
-  96%        { transform: rotate(10deg); }
-  98%        { transform: rotate(-4deg); }
-  100%       { transform: rotate(0deg); }
+  0%,
+  88% {
+    transform: rotate(0deg);
+  }
+  90% {
+    transform: rotate(-14deg);
+  }
+  92% {
+    transform: rotate(14deg);
+  }
+  94% {
+    transform: rotate(-10deg);
+  }
+  96% {
+    transform: rotate(10deg);
+  }
+  98% {
+    transform: rotate(-4deg);
+  }
+  100% {
+    transform: rotate(0deg);
+  }
 }
 
 /* ── Modal overlay ── */
@@ -143,10 +160,12 @@ defineExpose({ show });
   font-size: 0.95rem;
   font-weight: 700;
   color: #1a1a1a;
-  background: #FFDD00;
+  background: #ffdd00;
   border-radius: 8px;
   text-decoration: none;
-  transition: background 0.15s, transform 0.1s;
+  transition:
+    background 0.15s,
+    transform 0.1s;
 }
 
 .bmc-btn:hover {
@@ -180,7 +199,9 @@ defineExpose({ show });
 
 .scale-up-enter-active,
 .scale-up-leave-active {
-  transition: transform 0.25s ease, opacity 0.25s ease;
+  transition:
+    transform 0.25s ease,
+    opacity 0.25s ease;
 }
 .scale-up-enter-from,
 .scale-up-leave-to {

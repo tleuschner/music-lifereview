@@ -59,6 +59,7 @@ export interface SessionSummary {
 
 export interface MonthlyArtistBucket {
   month: Date;
+  artistId: number;
   artistName: string;
   playCount: number;
   msPlayed: number;
@@ -73,6 +74,8 @@ export interface MonthlyArtistBucket {
 
 export interface MonthlyTrackBucket {
   month: Date;
+  trackId: number;
+  artistId: number;
   trackName: string;
   artistName: string;
   albumName: string | null;
@@ -132,15 +135,17 @@ export interface BackButtonRow {
   replayRate: number;
 }
 
-export interface MonthlyHeatmapBucket {
+export interface MonthlyHourlyStatsBucket {
   month: Date;
   dayOfWeek: number;
   hourOfDay: number;
   msPlayed: number;
+  totalChainLength: number;
+  chainCount: number;
 }
 
 export interface TrackFirstPlay {
-  spotifyTrackUri: string;
+  trackId: number;
   firstPlayMonth: Date;
 }
 
@@ -230,21 +235,12 @@ export interface StaminaRow {
   chainCount: number;
 }
 
-export interface MonthlyStaminaBucket {
-  month: Date;
-  dayOfWeek: number;
-  hourOfDay: number;
-  totalChainLength: number;
-  chainCount: number;
-}
-
 export interface AggregatedIngestData {
   artistBuckets: MonthlyArtistBucket[];
   trackBuckets: MonthlyTrackBucket[];
-  heatmapBuckets: MonthlyHeatmapBucket[];
+  hourlyStatsBuckets: MonthlyHourlyStatsBucket[];
   trackFirstPlays: TrackFirstPlay[];
   monthlyTotals: MonthlyTotalBucket[];
-  staminaBuckets: MonthlyStaminaBucket[];
 }
 
 export interface StreamEntryRepository {
@@ -277,6 +273,9 @@ export interface StreamEntryRepository {
   getAlbumListeners(sessionId: string, filters: StatsFilter): Promise<AlbumListenerRow[]>;
   getSkipGraveyard(sessionId: string, limit: number): Promise<SkipGraveyardRow[]>;
   getSeasonalArtists(sessionId: string): Promise<SeasonalArtistRow[]>;
+
+  upsertArtistCatalog(artists: Array<{ artistName: string }>): Promise<Map<string, number>>;
+  upsertTrackCatalog(tracks: Array<{ trackName: string; artistName: string; albumName: string | null; spotifyTrackUri: string | null }>, artistIdMap: Map<string, number>): Promise<Map<string, number>>;
 
   upsertPersonalityRecord(sessionId: string, personalityId: string): Promise<void>;
   getPersonalityDistribution(): Promise<Array<{ personalityId: string; count: number }>>;

@@ -11,6 +11,9 @@ import type {
   SkippedTrackEntry,
   ArtistSkipRateEntry,
   BackButtonTrackEntry,
+  ContentSplitPoint,
+  ObsessionPhasePoint,
+  SessionStaminaResponse,
   GlobalStatsResponse,
   PercentileResponse,
   TrendingArtistEntry,
@@ -128,6 +131,21 @@ export async function getBackButtonTracks(token: string, filters: StatsFilter = 
 
 export async function getArtistCumulative(token: string, filters: StatsFilter = {}): Promise<ArtistTimelineResponse> {
   const { data } = await http.get(`/stats/${token}/artist-cumulative`, { params: filterParams(filters) });
+  return data;
+}
+
+export async function getContentSplit(token: string, filters: StatsFilter = {}): Promise<ContentSplitPoint[]> {
+  const { data } = await http.get(`/stats/${token}/content-split`, { params: filterParams(filters) });
+  return data;
+}
+
+export async function getObsessionTimeline(token: string, filters: StatsFilter = {}): Promise<ObsessionPhasePoint[]> {
+  const { data } = await http.get(`/stats/${token}/obsession-timeline`, { params: filterParams(filters) });
+  return data;
+}
+
+export async function getSessionStamina(token: string, filters: StatsFilter = {}): Promise<SessionStaminaResponse> {
+  const { data } = await http.get(`/stats/${token}/session-stamina`, { params: filterParams(filters) });
   return data;
 }
 

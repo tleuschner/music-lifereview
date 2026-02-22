@@ -101,6 +101,39 @@ export interface MonthlyTotalBucket {
   month: Date;
   playCount: number;
   msPlayed: number;
+  podcastPlayCount: number;
+  podcastMsPlayed: number;
+}
+
+export interface ContentSplitRow {
+  period: string;
+  musicMs: number;
+  podcastMs: number;
+  musicPlays: number;
+  podcastPlays: number;
+}
+
+export interface ObsessionPhaseRow {
+  period: string;
+  artistName: string;
+  artistMs: number;
+  totalMs: number;
+  percentage: number;
+}
+
+export interface StaminaRow {
+  dayOfWeek: number;
+  hourOfDay: number;
+  totalChainLength: number;
+  chainCount: number;
+}
+
+export interface MonthlyStaminaBucket {
+  month: Date;
+  dayOfWeek: number;
+  hourOfDay: number;
+  totalChainLength: number;
+  chainCount: number;
 }
 
 export interface AggregatedIngestData {
@@ -109,6 +142,7 @@ export interface AggregatedIngestData {
   heatmapBuckets: MonthlyHeatmapBucket[];
   trackFirstPlays: TrackFirstPlay[];
   monthlyTotals: MonthlyTotalBucket[];
+  staminaBuckets: MonthlyStaminaBucket[];
 }
 
 export interface StreamEntryRepository {
@@ -126,4 +160,7 @@ export interface StreamEntryRepository {
   getArtistSkipRates(sessionId: string, filters: StatsFilter): Promise<ArtistSkipRateRow[]>;
   getBackButtonTracks(sessionId: string, limit: number): Promise<BackButtonRow[]>;
   getArtistCumulative(sessionId: string, limit: number, filters: StatsFilter): Promise<{ periods: string[]; artists: Array<{ name: string; values: number[] }> }>;
+  getContentSplit(sessionId: string, filters: StatsFilter): Promise<ContentSplitRow[]>;
+  getObsessionTimeline(sessionId: string, filters: StatsFilter): Promise<ObsessionPhaseRow[]>;
+  getSessionStamina(sessionId: string, filters: StatsFilter): Promise<StaminaRow[]>;
 }

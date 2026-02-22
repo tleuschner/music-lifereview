@@ -11,6 +11,7 @@ import type {
   MonthlyHeatmapBucket,
   TrackFirstPlay,
   MonthlyTotalBucket,
+  MonthlyStaminaBucket,
 } from '../domain/port/outbound/StreamEntryRepository.js';
 import type { TokenGenerator } from '../domain/port/outbound/TokenGenerator.js';
 import type { AggregatedStatsStore } from '../domain/port/outbound/AggregatedStatsStore.js';
@@ -101,7 +102,7 @@ export class UploadStreamingHistoryUseCase implements UploadStreamingHistory {
     const trackMonthly = new Map<string, { trackName: string; artistName: string; albumName: string | null; spotifyTrackUri: string | null; playCount: number; msPlayed: number; skipCount: number; backCount: number }>();
     const heatmapMonthly = new Map<string, number>();
     const trackFirstPlayMap = new Map<string, Date>();
-    const monthlyTotals = new Map<string, { playCount: number; msPlayed: number }>();
+    const monthlyTotals = new Map<string, { playCount: number; msPlayed: number; podcastPlayCount: number; podcastMsPlayed: number }>();
 
     // Summary accumulators
     let totalMs = 0;
@@ -122,6 +123,7 @@ export class UploadStreamingHistoryUseCase implements UploadStreamingHistory {
       const hour = ts.getUTCHours();
       const skipped = e.skipped ?? false;
       const wentBack = e.reason_start === 'backbtn';
+      const isPodcast = !e.master_metadata_track_name && (e.episode_name != null || e.spotify_episode_uri != null);
 
       // Summary
       totalEntries++;
@@ -185,9 +187,49 @@ export class UploadStreamingHistoryUseCase implements UploadStreamingHistory {
       if (mt) {
         mt.playCount++;
         mt.msPlayed += e.ms_played;
+        if (isPodcast) { mt.podcastPlayCount++; mt.podcastMsPlayed += e.ms_played; }
       } else {
-        monthlyTotals.set(monthStr, { playCount: 1, msPlayed: e.ms_played });
+        monthlyTotals.set(monthStr, {
+          playCount: 1,
+          msPlayed: e.ms_played,
+          podcastPlayCount: isPodcast ? 1 : 0,
+          podcastMsPlayed: isPodcast ? e.ms_played : 0,
+        });
       }
+    }
+
+    // Session Stamina — detect consecutive reason_start='trackdone' chains
+    const staminaMonthly = new Map<string, { totalChainLength: number; chainCount: number }>();
+    const sorted = rawEntries
+      .filter(e => e.ts && e.ms_played != null)
+      .sort((a, b) => new Date(a.ts).getTime() - new Date(b.ts).getTime());
+
+    if (sorted.length > 0) {
+      let chainStartTs = new Date(sorted[0].ts);
+      let chainLength = 1;
+
+      const recordChain = (startTs: Date, length: number) => {
+        const m = new Date(Date.UTC(startTs.getUTCFullYear(), startTs.getUTCMonth(), 1));
+        const key = `${m.toISOString().slice(0, 10)}:${startTs.getUTCDay()}:${startTs.getUTCHours()}`;
+        const existing = staminaMonthly.get(key);
+        if (existing) {
+          existing.totalChainLength += length;
+          existing.chainCount++;
+        } else {
+          staminaMonthly.set(key, { totalChainLength: length, chainCount: 1 });
+        }
+      };
+
+      for (let i = 1; i < sorted.length; i++) {
+        if (sorted[i].reason_start === 'trackdone') {
+          chainLength++;
+        } else {
+          recordChain(chainStartTs, chainLength);
+          chainStartTs = new Date(sorted[i].ts);
+          chainLength = 1;
+        }
+      }
+      recordChain(chainStartTs, chainLength);
     }
 
     // Convert maps to bucket arrays
@@ -224,7 +266,25 @@ export class UploadStreamingHistoryUseCase implements UploadStreamingHistory {
 
     const monthlyTotalBuckets: MonthlyTotalBucket[] = [];
     for (const [monthStr, val] of monthlyTotals) {
-      monthlyTotalBuckets.push({ month: new Date(monthStr), ...val });
+      monthlyTotalBuckets.push({
+        month: new Date(monthStr),
+        playCount: val.playCount,
+        msPlayed: val.msPlayed,
+        podcastPlayCount: val.podcastPlayCount,
+        podcastMsPlayed: val.podcastMsPlayed,
+      });
+    }
+
+    const staminaBuckets: MonthlyStaminaBucket[] = [];
+    for (const [key, val] of staminaMonthly) {
+      const [monthStr, dowStr, hourStr] = key.split(':');
+      staminaBuckets.push({
+        month: new Date(monthStr),
+        dayOfWeek: Number(dowStr),
+        hourOfDay: Number(hourStr),
+        totalChainLength: val.totalChainLength,
+        chainCount: val.chainCount,
+      });
     }
 
     const summary: SessionSummary = {
@@ -245,6 +305,7 @@ export class UploadStreamingHistoryUseCase implements UploadStreamingHistory {
         heatmapBuckets,
         trackFirstPlays,
         monthlyTotals: monthlyTotalBuckets,
+        staminaBuckets,
       },
     };
   }

@@ -1,0 +1,3 @@
+ALTER TABLE monthly_listen_totals
+  ADD COLUMN IF NOT EXISTS podcast_ms_played   BIGINT  NOT NULL DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS podcast_play_count  INTEGER NOT NULL DEFAULT 0;

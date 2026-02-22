@@ -1,6 +1,6 @@
 <template>
   <div class="dashboard">
-    <LoadingSpinner v-if="loading && !overview" message="Loading your stats..." />
+    <LoadingSpinner v-if="loadingStates.overview && !overview" message="Loading your stats..." />
 
     <template v-if="overview">
       <!-- Overview Stats -->
@@ -27,26 +27,46 @@
       />
 
       <!-- Charts -->
-      <ListeningTimelineChart :data="timeline" />
+      <div v-if="loadingStates.timeline" class="chart-container card"><LoadingSpinner /></div>
+      <ListeningTimelineChart v-else :data="timeline" />
 
       <div class="grid grid-2">
-        <TopArtistsChart :data="topArtists" :sort-by="sortBy" />
-        <TopTracksChart :data="topTracks" :sort-by="sortBy" />
+        <div v-if="loadingStates.topArtists" class="chart-container card"><LoadingSpinner /></div>
+        <TopArtistsChart v-else :data="topArtists" :sort-by="sortBy" />
+
+        <div v-if="loadingStates.topTracks" class="chart-container card"><LoadingSpinner /></div>
+        <TopTracksChart v-else :data="topTracks" :sort-by="sortBy" />
       </div>
 
-      <HeatmapChart :data="heatmap" />
+      <div v-if="loadingStates.heatmap" class="chart-container card"><LoadingSpinner /></div>
+      <HeatmapChart v-else :data="heatmap" />
 
-      <StackedArtistAreaChart :data="artistTimeline" />
+      <div v-if="loadingStates.sessionStamina" class="chart-container card"><LoadingSpinner /></div>
+      <SessionStaminaChart v-else :data="sessionStamina" />
 
-      <DiscoveryVsRepetitionChart :data="discoveryRate" />
+      <div v-if="loadingStates.artistTimeline" class="chart-container card"><LoadingSpinner /></div>
+      <StackedArtistAreaChart v-else :data="artistTimeline" />
 
-      <ArtistRaceChart :data="artistCumulative" />
+      <div v-if="loadingStates.discoveryRate" class="chart-container card"><LoadingSpinner /></div>
+      <DiscoveryVsRepetitionChart v-else :data="discoveryRate" />
 
-      <ArtistLoyaltyChart :data="artistLoyalty" />
+      <div v-if="loadingStates.artistCumulative" class="chart-container card"><LoadingSpinner /></div>
+      <ArtistRaceChart v-else :data="artistCumulative" />
 
-      <ReplayLeaderboard :data="backButtonTracks" />
+      <div v-if="loadingStates.artistLoyalty" class="chart-container card"><LoadingSpinner /></div>
+      <ArtistLoyaltyChart v-else :data="artistLoyalty" />
 
-      <SkippedTracksLeaderboard :data="skippedTracks" />
+      <div v-if="loadingStates.backButtonTracks" class="chart-container card"><LoadingSpinner /></div>
+      <ReplayLeaderboard v-else :data="backButtonTracks" />
+
+      <div v-if="loadingStates.skippedTracks" class="chart-container card"><LoadingSpinner /></div>
+      <SkippedTracksLeaderboard v-else :data="skippedTracks" />
+
+      <div v-if="loadingStates.obsessionTimeline" class="chart-container card"><LoadingSpinner /></div>
+      <ObsessionTimelineChart v-else :data="obsessionTimeline" />
+
+      <div v-if="loadingStates.contentSplit" class="chart-container card"><LoadingSpinner /></div>
+      <PodcastMusicChart v-else :data="contentSplit" />
     </template>
   </div>
 </template>
@@ -70,6 +90,9 @@ import ArtistLoyaltyChart from '../components/charts/ArtistLoyaltyChart.vue';
 import ArtistRaceChart from '../components/charts/ArtistRaceChart.vue';
 import ReplayLeaderboard from '../components/charts/ReplayLeaderboard.vue';
 import SkippedTracksLeaderboard from '../components/charts/SkippedTracksLeaderboard.vue';
+import PodcastMusicChart from '../components/charts/PodcastMusicChart.vue';
+import ObsessionTimelineChart from '../components/charts/ObsessionTimelineChart.vue';
+import SessionStaminaChart from '../components/charts/SessionStaminaChart.vue';
 
 const route = useRoute();
 const token = computed(() => route.params.token as string);
@@ -78,7 +101,7 @@ const shareUrl = computed(() => `${window.location.origin}/results/${token.value
 const { dateFrom, dateTo, sortBy, activeFilters, hasActiveFilters, resetFilters } = useFilters();
 
 const {
-  loading,
+  loadingStates,
   overview,
   topArtists,
   topTracks,
@@ -90,6 +113,9 @@ const {
   artistLoyalty,
   backButtonTracks,
   artistCumulative,
+  contentSplit,
+  obsessionTimeline,
+  sessionStamina,
   fetchAll,
 } = useStreamingData(token, activeFilters);
 

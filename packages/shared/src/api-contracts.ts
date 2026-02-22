@@ -100,6 +100,28 @@ export interface BackButtonTrackEntry {
   replayRate: number;  // backCount / totalPlays × 100
 }
 
+export interface ContentSplitPoint {
+  period: string;       // "YYYY-MM"
+  musicHours: number;
+  podcastHours: number;
+  musicPlays: number;
+  podcastPlays: number;
+}
+
+export interface ObsessionPhasePoint {
+  period: string;       // "YYYY-MM"
+  artistName: string;   // the dominant artist that month
+  artistHours: number;  // hours listened to that artist
+  totalHours: number;   // total listening hours that month
+  percentage: number;   // artistHours / totalHours × 100 (always >= 40)
+}
+
+export interface SessionStaminaResponse {
+  /** 7 rows (Mon–Sun) × 24 cols (0–23h), each cell = average chain length */
+  data: number[][];
+  overallAverage: number;
+}
+
 // ─── Community Stats ────────────────────────────────────
 
 export interface GlobalStatsResponse {

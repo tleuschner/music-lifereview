@@ -10,6 +10,9 @@ import type {
   SkippedTrackEntry,
   ArtistSkipRateEntry,
   BackButtonTrackEntry,
+  ContentSplitPoint,
+  ObsessionPhasePoint,
+  SessionStaminaResponse,
 } from '@music-livereview/shared';
 
 export interface QueryPersonalStats {
@@ -24,4 +27,7 @@ export interface QueryPersonalStats {
   getArtistLoyalty(token: string, filters: StatsFilter): Promise<ArtistSkipRateEntry[] | null>;
   getBackButtonTracks(token: string, limit: number): Promise<BackButtonTrackEntry[] | null>;
   getArtistCumulative(token: string, limit: number, filters: StatsFilter): Promise<ArtistTimelineResponse | null>;
+  getContentSplit(token: string, filters: StatsFilter): Promise<ContentSplitPoint[] | null>;
+  getObsessionTimeline(token: string, filters: StatsFilter): Promise<ObsessionPhasePoint[] | null>;
+  getSessionStamina(token: string, filters: StatsFilter): Promise<SessionStaminaResponse | null>;
 }

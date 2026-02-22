@@ -13,6 +13,9 @@ import type {
   SkippedRow,
   ArtistSkipRateRow,
   BackButtonRow,
+  ContentSplitRow,
+  ObsessionPhaseRow,
+  StaminaRow,
 } from '../../../domain/port/outbound/StreamEntryRepository.js';
 
 export class PostgresStreamEntryRepository implements StreamEntryRepository {
@@ -79,8 +82,23 @@ export class PostgresStreamEntryRepository implements StreamEntryRepository {
           month: b.month,
           play_count: b.playCount,
           ms_played: b.msPlayed,
+          podcast_play_count: b.podcastPlayCount,
+          podcast_ms_played: b.podcastMsPlayed,
         }));
         await trx('monthly_listen_totals').insert(batch);
+      }
+
+      // Monthly stamina
+      for (let i = 0; i < data.staminaBuckets.length; i += BATCH_INSERT_SIZE) {
+        const batch = data.staminaBuckets.slice(i, i + BATCH_INSERT_SIZE).map(b => ({
+          session_id: sessionId,
+          month: b.month,
+          day_of_week: b.dayOfWeek,
+          hour_of_day: b.hourOfDay,
+          total_chain_length: b.totalChainLength,
+          chain_count: b.chainCount,
+        }));
+        await trx('monthly_stamina').insert(batch);
       }
     });
   }
@@ -449,6 +467,117 @@ export class PostgresStreamEntryRepository implements StreamEntryRepository {
       backCount: Number(r.back_count),
       totalPlays: Number(r.total_plays),
       replayRate: Number(r.replay_rate),
+    }));
+  }
+
+  async getContentSplit(sessionId: string, filters: StatsFilter): Promise<ContentSplitRow[]> {
+    const sql = `
+      SELECT
+        to_char(month, 'YYYY-MM') AS period,
+        (ms_played - podcast_ms_played)::bigint          AS music_ms,
+        podcast_ms_played::bigint                        AS podcast_ms,
+        (play_count - podcast_play_count)::integer       AS music_plays,
+        podcast_play_count::integer                      AS podcast_plays
+      FROM monthly_listen_totals
+      WHERE session_id = ?
+        ${filters.from ? "AND month >= date_trunc('month', ?::date)" : ''}
+        ${filters.to   ? "AND month <= date_trunc('month', ?::date)" : ''}
+      ORDER BY month
+    `;
+
+    const bindings: unknown[] = [sessionId];
+    if (filters.from) bindings.push(filters.from);
+    if (filters.to) bindings.push(filters.to);
+
+    const result = await this.db.raw(sql, bindings);
+    return result.rows.map((r: { period: string; music_ms: string; podcast_ms: string; music_plays: string; podcast_plays: string }) => ({
+      period: r.period,
+      musicMs: Number(r.music_ms),
+      podcastMs: Number(r.podcast_ms),
+      musicPlays: Number(r.music_plays),
+      podcastPlays: Number(r.podcast_plays),
+    }));
+  }
+
+  async getObsessionTimeline(sessionId: string, filters: StatsFilter): Promise<ObsessionPhaseRow[]> {
+    const sql = `
+      WITH monthly_top AS (
+        SELECT
+          month,
+          artist_name,
+          SUM(ms_played) AS artist_ms,
+          ROW_NUMBER() OVER (PARTITION BY month ORDER BY SUM(ms_played) DESC) AS rn
+        FROM monthly_artist_stats
+        WHERE session_id = ?
+          ${filters.from ? "AND month >= date_trunc('month', ?::date)" : ''}
+          ${filters.to   ? "AND month <= date_trunc('month', ?::date)" : ''}
+        GROUP BY month, artist_name
+      ),
+      monthly_totals AS (
+        SELECT
+          month,
+          SUM(ms_played) AS total_ms
+        FROM monthly_artist_stats
+        WHERE session_id = ?
+          ${filters.from ? "AND month >= date_trunc('month', ?::date)" : ''}
+          ${filters.to   ? "AND month <= date_trunc('month', ?::date)" : ''}
+        GROUP BY month
+      )
+      SELECT
+        to_char(t.month, 'YYYY-MM')                                         AS period,
+        t.artist_name,
+        t.artist_ms::bigint,
+        m.total_ms::bigint,
+        ROUND(t.artist_ms * 100.0 / NULLIF(m.total_ms, 0), 1)              AS percentage
+      FROM monthly_top t
+      JOIN monthly_totals m ON t.month = m.month
+      WHERE t.rn = 1
+        AND t.artist_ms * 100.0 / NULLIF(m.total_ms, 0) >= 40
+      ORDER BY t.month
+    `;
+
+    const bindings: unknown[] = [sessionId];
+    if (filters.from) bindings.push(filters.from);
+    if (filters.to) bindings.push(filters.to);
+    // second occurrence of session_id for monthly_totals CTE
+    bindings.push(sessionId);
+    if (filters.from) bindings.push(filters.from);
+    if (filters.to) bindings.push(filters.to);
+
+    const result = await this.db.raw(sql, bindings);
+    return result.rows.map((r: { period: string; artist_name: string; artist_ms: string; total_ms: string; percentage: string }) => ({
+      period: r.period,
+      artistName: r.artist_name,
+      artistMs: Number(r.artist_ms),
+      totalMs: Number(r.total_ms),
+      percentage: Number(r.percentage),
+    }));
+  }
+
+  async getSessionStamina(sessionId: string, filters: StatsFilter): Promise<StaminaRow[]> {
+    const sql = `
+      SELECT
+        day_of_week,
+        hour_of_day,
+        SUM(total_chain_length)::integer AS total_chain_length,
+        SUM(chain_count)::integer        AS chain_count
+      FROM monthly_stamina
+      WHERE session_id = ?
+        ${filters.from ? "AND month >= date_trunc('month', ?::date)" : ''}
+        ${filters.to   ? "AND month <= date_trunc('month', ?::date)" : ''}
+      GROUP BY day_of_week, hour_of_day
+    `;
+
+    const bindings: unknown[] = [sessionId];
+    if (filters.from) bindings.push(filters.from);
+    if (filters.to) bindings.push(filters.to);
+
+    const result = await this.db.raw(sql, bindings);
+    return result.rows.map((r: { day_of_week: string; hour_of_day: string; total_chain_length: string; chain_count: string }) => ({
+      dayOfWeek: Number(r.day_of_week),
+      hourOfDay: Number(r.hour_of_day),
+      totalChainLength: Number(r.total_chain_length),
+      chainCount: Number(r.chain_count),
     }));
   }
 

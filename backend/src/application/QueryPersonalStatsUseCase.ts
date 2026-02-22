@@ -11,6 +11,9 @@ import type {
   SkippedTrackEntry,
   ArtistSkipRateEntry,
   BackButtonTrackEntry,
+  ContentSplitPoint,
+  ObsessionPhasePoint,
+  SessionStaminaResponse,
 } from '@music-livereview/shared';
 import type { QueryPersonalStats } from '../domain/port/inbound/QueryPersonalStats.js';
 import type { UploadSessionRepository } from '../domain/port/outbound/UploadSessionRepository.js';
@@ -190,5 +193,61 @@ export class QueryPersonalStatsUseCase implements QueryPersonalStats {
         values: a.values.map(v => Math.round(v / MS_PER_HOUR * 10) / 10),
       })),
     };
+  }
+
+  async getContentSplit(token: string, filters: StatsFilter): Promise<ContentSplitPoint[] | null> {
+    const sessionId = await this.resolveSessionId(token);
+    if (!sessionId) return null;
+
+    const rows = await this.entryRepo.getContentSplit(sessionId, filters);
+    return rows.map(r => ({
+      period: r.period,
+      musicHours: Math.round(r.musicMs / MS_PER_HOUR * 10) / 10,
+      podcastHours: Math.round(r.podcastMs / MS_PER_HOUR * 10) / 10,
+      musicPlays: r.musicPlays,
+      podcastPlays: r.podcastPlays,
+    }));
+  }
+
+  async getObsessionTimeline(token: string, filters: StatsFilter): Promise<ObsessionPhasePoint[] | null> {
+    const sessionId = await this.resolveSessionId(token);
+    if (!sessionId) return null;
+
+    const rows = await this.entryRepo.getObsessionTimeline(sessionId, filters);
+    return rows.map(r => ({
+      period: r.period,
+      artistName: r.artistName,
+      artistHours: Math.round(r.artistMs / MS_PER_HOUR * 10) / 10,
+      totalHours: Math.round(r.totalMs / MS_PER_HOUR * 10) / 10,
+      percentage: r.percentage,
+    }));
+  }
+
+  async getSessionStamina(token: string, filters: StatsFilter): Promise<SessionStaminaResponse | null> {
+    const sessionId = await this.resolveSessionId(token);
+    if (!sessionId) return null;
+
+    const rows = await this.entryRepo.getSessionStamina(sessionId, filters);
+
+    // Build 7×24 matrix (Mon=0..Sun=6, 0h..23h)
+    const data: number[][] = Array.from({ length: 7 }, () => Array(24).fill(0));
+    let totalChains = 0;
+    let totalLength = 0;
+
+    for (const row of rows) {
+      const dayIndex = row.dayOfWeek === 0 ? 6 : row.dayOfWeek - 1;
+      const avg = row.chainCount > 0
+        ? Math.round(row.totalChainLength / row.chainCount * 10) / 10
+        : 0;
+      data[dayIndex][row.hourOfDay] = avg;
+      totalChains += row.chainCount;
+      totalLength += row.totalChainLength;
+    }
+
+    const overallAverage = totalChains > 0
+      ? Math.round(totalLength / totalChains * 10) / 10
+      : 0;
+
+    return { data, overallAverage };
   }
 }

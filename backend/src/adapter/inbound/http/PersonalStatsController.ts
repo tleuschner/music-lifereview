@@ -42,6 +42,9 @@ export function createPersonalStatsController(useCase: QueryPersonalStats): Rout
   router.get('/:token/artist-loyalty', handle((t, f) => useCase.getArtistLoyalty(t, f)));
   router.get('/:token/back-button', handle((t, f) => useCase.getBackButtonTracks(t, f.limit ?? 50)));
   router.get('/:token/artist-cumulative', handle((t, f) => useCase.getArtistCumulative(t, f.limit ?? DEFAULT_ARTIST_TIMELINE_LIMIT, f)));
+  router.get('/:token/content-split', handle((t, f) => useCase.getContentSplit(t, f)));
+  router.get('/:token/obsession-timeline', handle((t, f) => useCase.getObsessionTimeline(t, f)));
+  router.get('/:token/session-stamina', handle((t, f) => useCase.getSessionStamina(t, f)));
 
   return router;
 }

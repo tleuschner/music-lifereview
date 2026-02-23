@@ -3,7 +3,7 @@
  */
 export interface SpotifyStreamEntry {
   ts: string;
-  username: string;
+  username?: string;
   platform: string;
   ms_played: number;
   conn_country: string;

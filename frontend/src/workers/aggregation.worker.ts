@@ -64,6 +64,16 @@ self.onmessage = async (event: MessageEvent<WorkerInMessage>) => {
     return;
   }
 
+  // Fall back to content fingerprint: earliest 20 entries' ts + track URI
+  if (!userHash && allEntries.length > 0) {
+    const sample = allEntries
+      .slice(0, 200)
+      .sort((a, b) => (a.ts < b.ts ? -1 : a.ts > b.ts ? 1 : 0))
+      .slice(0, 20);
+    const fingerprint = sample.map(e => `${e.ts}|${e.spotify_track_uri ?? e.episode_name ?? ''}`).join(',');
+    userHash = await sha256hex(fingerprint);
+  }
+
   // Run aggregation
   self.postMessage({ type: 'progress', stage: 'aggregating' } satisfies WorkerOutMessage);
   const result = aggregateEntries(allEntries);

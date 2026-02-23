@@ -5,7 +5,7 @@ export function useFilters() {
   const dateFrom = ref<string | null>(null);
   const dateTo = ref<string | null>(null);
   const selectedArtist = ref<string | null>(null);
-  const sortBy = ref<"hours" | "count">("hours");
+  const sortBy = ref<"hours" | "count">("count");
   const limit = ref(20);
 
   // Month picker returns "YYYY-MM"; append "-01" so the backend can cast to a full date
@@ -28,7 +28,7 @@ export function useFilters() {
     dateFrom.value = null;
     dateTo.value = null;
     selectedArtist.value = null;
-    sortBy.value = "hours";
+    sortBy.value = "count";
     limit.value = 20;
   }
 

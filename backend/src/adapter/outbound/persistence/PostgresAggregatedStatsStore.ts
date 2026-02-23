@@ -68,15 +68,16 @@ export class PostgresAggregatedStatsStore implements AggregatedStatsStore {
 
     const sql = `
       SELECT
-        a.artist_name as name,
+        ac.artist_name as name,
         COUNT(DISTINCT a.session_id) as upload_count,
         SUM(a.play_count) as total_plays
       FROM monthly_artist_stats a
+      JOIN artist_catalog ac ON ac.id = a.artist_id
       JOIN upload_sessions s ON a.session_id = s.id
       WHERE s.status = 'completed'
         AND s.is_active = TRUE
         ${dateFilter}
-      GROUP BY a.artist_name
+      GROUP BY ac.artist_name
       ORDER BY upload_count DESC, total_plays DESC
       LIMIT ?
     `;

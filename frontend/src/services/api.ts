@@ -1,4 +1,6 @@
 import axios from 'axios';
+import type { AggregationResult, UploadAggregatedRequest } from '@music-livereview/shared';
+import type { WorkerOutMessage } from '../workers/aggregation.worker';
 import type {
   StatusResponse,
   OverviewResponse,
@@ -33,8 +35,6 @@ import type {
   ReboundArtistEntry,
   MarathonEntry,
 } from '@music-livereview/shared';
-import { PII_FIELDS } from '@music-livereview/shared';
-
 const http = axios.create({ baseURL: '/api' });
 
 function filterParams(filters: StatsFilter): Record<string, string> {
@@ -47,43 +47,76 @@ function filterParams(filters: StatsFilter): Record<string, string> {
   return params;
 }
 
-async function sha256hex(text: string): Promise<string> {
-  const buffer = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text));
-  return Array.from(new Uint8Array(buffer)).map(b => b.toString(16).padStart(2, '0')).join('');
+export type AggregateProgressEvent =
+  | { stage: 'reading'; fileIndex: number; total: number }
+  | { stage: 'aggregating' };
+
+/** Runs PII stripping + aggregation in a Web Worker off the main thread. */
+export function aggregateInWorker(
+  files: File[],
+  onProgress?: (event: AggregateProgressEvent) => void,
+): Promise<{ result: AggregationResult; userHash: string | null }> {
+  return new Promise((resolve, reject) => {
+    const worker = new Worker(
+      new URL('../workers/aggregation.worker.ts', import.meta.url),
+      { type: 'module' },
+    );
+
+    worker.onmessage = (event: MessageEvent<WorkerOutMessage>) => {
+      const msg = event.data;
+      if (msg.type === 'progress') {
+        onProgress?.(msg.stage === 'reading'
+          ? { stage: 'reading', fileIndex: msg.fileIndex, total: msg.total }
+          : { stage: 'aggregating' });
+      } else if (msg.type === 'done') {
+        worker.terminate();
+        resolve({ result: msg.result, userHash: msg.userHash });
+      } else if (msg.type === 'error') {
+        worker.terminate();
+        reject(new Error(msg.message));
+      }
+    };
+
+    worker.onerror = (err) => {
+      worker.terminate();
+      reject(new Error(err.message));
+    };
+
+    // Spread into a plain array — Vue's reactive Proxy is not structured-cloneable
+    worker.postMessage({ type: 'aggregate', files: Array.from(files) });
+  });
 }
 
-// Upload — strips PII in the browser before sending.
-// The username is hashed (SHA-256) and sent as a separate field for deduplication;
-// the raw value never leaves the browser.
-export async function uploadFiles(files: File[], optOut: boolean): Promise<{ shareToken: string; status: string }> {
-  const form = new FormData();
-  let userHash: string | null = null;
+async function gzipJson(payload: unknown): Promise<ArrayBuffer> {
+  const stream = new Blob([JSON.stringify(payload)])
+    .stream()
+    .pipeThrough(new CompressionStream('gzip'));
+  return new Response(stream).arrayBuffer();
+}
 
-  for (const file of files) {
-    const entries = JSON.parse(await file.text()) as Record<string, unknown>[];
-
-    // Hash username from the first entry that has one (before stripping)
-    if (!userHash) {
-      const firstUsername = entries.find(e => typeof e.username === 'string')?.username as string | undefined;
-      if (firstUsername) {
-        userHash = await sha256hex(firstUsername);
-      }
-    }
-
-    // Strip all PII fields in-browser before sending
-    const cleaned = entries.map(entry => {
-      const e = { ...entry };
-      for (const field of PII_FIELDS) delete e[field as string];
-      return e;
-    });
-
-    form.append('files', new Blob([JSON.stringify(cleaned)], { type: 'application/json' }), file.name);
-  }
-
-  if (userHash) form.append('userHash', userHash);
-  form.append('optOut', String(optOut));
-
-  const { data } = await http.post('/upload', form);
+/** POSTs pre-aggregated data to the server. Returns immediately with a share token. */
+export async function postAggregated(
+  result: AggregationResult,
+  userHash: string | null,
+  optOut: boolean,
+): Promise<{ shareToken: string; status: string }> {
+  const body: UploadAggregatedRequest = {
+    optOut,
+    userHash,
+    summary: result.summary,
+    artistBuckets: result.artistBuckets,
+    trackBuckets: result.trackBuckets,
+    hourlyStatsBuckets: result.hourlyStatsBuckets,
+    trackFirstPlays: result.trackFirstPlays,
+    monthlyTotals: result.monthlyTotals,
+    marathons: result.marathons,
+  };
+  const compressed = await gzipJson(body);
+  // Send as raw binary — server gunzips manually so the size limit
+  // applies to the compressed bytes (~3–5 MB), not the decompressed JSON.
+  const { data } = await http.post('/upload', compressed, {
+    headers: { 'Content-Type': 'application/octet-stream' },
+  });
   return data;
 }
 

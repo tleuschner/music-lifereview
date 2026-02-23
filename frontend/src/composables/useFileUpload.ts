@@ -1,8 +1,8 @@
 import { ref } from 'vue';
-import { uploadFiles, getStatus } from '../services/api';
+import { aggregateInWorker, postAggregated, getStatus } from '../services/api';
 import type { StatusResponse } from '@music-livereview/shared';
 
-export type UploadState = 'idle' | 'validating' | 'uploading' | 'processing' | 'done' | 'error';
+export type UploadState = 'idle' | 'validating' | 'reading' | 'aggregating' | 'uploading' | 'processing' | 'done' | 'error';
 
 export function useFileUpload() {
   const files = ref<File[]>([]);
@@ -11,6 +11,7 @@ export function useFileUpload() {
   const error = ref<string | null>(null);
   const statusData = ref<StatusResponse | null>(null);
   const optOut = ref(false);
+  const readingProgress = ref<{ fileIndex: number; total: number } | null>(null);
 
   function addFiles(newFiles: File[]) {
     const jsonFiles = newFiles.filter(f => f.name.endsWith('.json'));
@@ -32,23 +33,39 @@ export function useFileUpload() {
     shareToken.value = null;
     error.value = null;
     statusData.value = null;
+    readingProgress.value = null;
   }
 
   async function startUpload() {
     if (files.value.length === 0) return;
 
     try {
-      uploadState.value = 'uploading';
       error.value = null;
+      readingProgress.value = null;
 
-      const result = await uploadFiles(files.value, optOut.value);
-      shareToken.value = result.shareToken;
+      // Step 1: read + aggregate in worker
+      uploadState.value = 'reading';
+      const { result, userHash } = await aggregateInWorker(files.value, (event) => {
+        if (event.stage === 'reading') {
+          readingProgress.value = { fileIndex: event.fileIndex, total: event.total };
+        } else {
+          uploadState.value = 'aggregating';
+          readingProgress.value = null;
+        }
+      });
+
+      // Step 2: POST the small aggregated payload
+      uploadState.value = 'uploading';
+      const response = await postAggregated(result, userHash, optOut.value);
+      shareToken.value = response.shareToken;
+
+      // Step 3: poll until server finishes DB writes
       uploadState.value = 'processing';
-
-      await pollStatus(result.shareToken);
-    } catch (err: any) {
+      await pollStatus(response.shareToken);
+    } catch (err: unknown) {
       uploadState.value = 'error';
-      error.value = err.response?.data?.error ?? err.message ?? 'Upload failed';
+      const e = err as { response?: { data?: { error?: string } }; message?: string };
+      error.value = e.response?.data?.error ?? e.message ?? 'Upload failed';
     }
   }
 
@@ -79,5 +96,5 @@ export function useFileUpload() {
     error.value = 'Processing timed out. Please try again.';
   }
 
-  return { files, uploadState, shareToken, error, statusData, optOut, addFiles, removeFile, reset, startUpload };
+  return { files, uploadState, shareToken, error, statusData, optOut, readingProgress, addFiles, removeFile, reset, startUpload };
 }

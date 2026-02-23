@@ -53,7 +53,7 @@ app.get("/api/health", (_req, res) => {
 });
 
 // Routes
-app.use("/api", createUploadController(uploadUseCase, config.maxUploadSizeMb));
+app.use("/api", createUploadController(uploadUseCase));
 app.use("/api/stats", createPersonalStatsController(personalStatsUseCase, deleteUploadSessionUseCase));
 app.use(
   "/api/community",

@@ -7,6 +7,46 @@ export interface UploadResponse {
 
 export type UploadStatus = 'pending' | 'processing' | 'completed' | 'failed';
 
+/** POST /api/upload — body sent by the browser after client-side aggregation */
+export interface UploadAggregatedRequest {
+  optOut: boolean;
+  userHash: string | null;
+  summary: {
+    totalMsPlayed: number; totalEntries: number;
+    uniqueTracks: number; uniqueArtists: number; uniqueAlbums: number;
+    dateFrom: string; dateTo: string;
+  };
+  artistBuckets: Array<{
+    month: string; artistName: string; playCount: number; msPlayed: number;
+    skipCount: number; deliberateCount: number; servedCount: number;
+    weekdayPlayCount: number; weekendPlayCount: number;
+    weekdaySkipCount: number; weekendSkipCount: number;
+  }>;
+  trackBuckets: Array<{
+    month: string; trackName: string; artistName: string;
+    albumName: string | null; spotifyTrackUri: string | null;
+    playCount: number; msPlayed: number; skipCount: number; backCount: number;
+    shufflePlayCount: number; shuffleTrackdoneCount: number;
+    deliberateCount: number; servedCount: number;
+    shortPlayCount: number; trackdoneCount: number; fwdSkipCount: number;
+  }>;
+  hourlyStatsBuckets: Array<{
+    month: string; dayOfWeek: number; hourOfDay: number;
+    msPlayed: number; totalChainLength: number; chainCount: number;
+  }>;
+  trackFirstPlays: Array<{ spotifyTrackUri: string; firstPlayMonth: string }>;
+  monthlyTotals: Array<{
+    month: string; playCount: number; msPlayed: number;
+    podcastPlayCount: number; podcastMsPlayed: number; shuffleCount: number;
+  }>;
+  marathons: Array<{
+    startTime: string; endTime: string; durationMs: number;
+    playCount: number; skipCount: number; skipRate: number;
+    topArtist: string | null; topTrack: string | null; topTrackArtist: string | null;
+    rank: number;
+  }>;
+}
+
 export interface StatusResponse {
   status: UploadStatus;
   entryCount?: number;

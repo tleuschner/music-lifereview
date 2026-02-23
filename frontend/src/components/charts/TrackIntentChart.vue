@@ -1,8 +1,16 @@
 <template>
   <div class="chart-container card">
     <div class="chart-header">
-      <h3>Deliberate vs. Served — by Track</h3>
-      <p class="chart-subtitle">Songs you actively chose vs. ones that just came on — ranked by how often you picked them</p>
+      <div class="header-row">
+        <div>
+          <h3>Deliberate vs. Served — by Track</h3>
+          <p class="chart-subtitle">Songs you actively chose vs. ones that just came on</p>
+        </div>
+        <div class="sort-toggle">
+          <button :class="{ active: sortMode === 'deliberate_rate' }" @click="sortMode = 'deliberate_rate'">By Rate</button>
+          <button :class="{ active: sortMode === 'total_plays' }" @click="sortMode = 'total_plays'">By Plays</button>
+        </div>
+      </div>
     </div>
 
     <div v-if="!hasData" class="empty-state">
@@ -41,7 +49,16 @@ const props = defineProps<{ data: TrackIntentEntry[] }>();
 const canvas = ref<HTMLCanvasElement | null>(null);
 let chart: Chart | null = null;
 
-const displayed = computed(() => props.data.slice(0, 30));
+const sortMode = ref<'deliberate_rate' | 'total_plays'>('deliberate_rate');
+
+const displayed = computed(() => {
+  const sorted = [...props.data].sort((a, b) =>
+    sortMode.value === 'total_plays'
+      ? b.totalPlays - a.totalPlays
+      : b.deliberateRate - a.deliberateRate
+  );
+  return sorted.slice(0, 50);
+});
 const hasData = computed(() => displayed.value.length > 0);
 
 function buildChart() {
@@ -115,7 +132,7 @@ onMounted(() => {
 });
 
 watch(
-  () => props.data,
+  [() => props.data, sortMode],
   () => {
     destroyChart();
     if (hasData.value) buildChart();
@@ -130,6 +147,13 @@ onUnmounted(destroyChart);
   margin-bottom: 1rem;
 }
 
+.header-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
 .chart-header h3 {
   margin: 0 0 0.25rem;
   font-size: 1.1rem;
@@ -140,6 +164,34 @@ onUnmounted(destroyChart);
   margin: 0;
   font-size: 0.85rem;
   color: #888;
+}
+
+.sort-toggle {
+  display: flex;
+  gap: 0.25rem;
+  flex-shrink: 0;
+}
+
+.sort-toggle button {
+  padding: 0.25rem 0.65rem;
+  font-size: 0.75rem;
+  border: 1px solid #333;
+  border-radius: 4px;
+  background: transparent;
+  color: #888;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+
+.sort-toggle button:hover {
+  border-color: #555;
+  color: #ccc;
+}
+
+.sort-toggle button.active {
+  background: #1db954;
+  border-color: #1db954;
+  color: #000;
 }
 
 .legend {
@@ -168,7 +220,7 @@ onUnmounted(destroyChart);
 
 .chart-wrapper {
   position: relative;
-  height: 600px;
+  height: 1200px;
 }
 
 .empty-state {

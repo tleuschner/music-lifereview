@@ -1,7 +1,7 @@
 <template>
   <div class="progress card">
     <div class="progress-status">
-      <LoadingSpinner v-if="state === 'uploading' || state === 'processing'" :message="message" />
+      <LoadingSpinner v-if="state === 'reading' || state === 'aggregating' || state === 'uploading' || state === 'processing'" :message="message" />
       <div v-else-if="state === 'error'" class="progress-error">
         <p class="progress-error-text">{{ error }}</p>
         <button class="btn btn-secondary" @click="$emit('retry')">Try Again</button>
@@ -26,8 +26,10 @@ const props = defineProps<{
 defineEmits<{ retry: [] }>();
 
 const message = computed(() => {
-  if (props.state === 'uploading') return 'Uploading your data...';
-  if (props.state === 'processing') return 'Analyzing your listening history...';
+  if (props.state === 'reading') return 'Reading files...';
+  if (props.state === 'aggregating') return 'Processing your listening history...';
+  if (props.state === 'uploading') return 'Uploading...';
+  if (props.state === 'processing') return 'Saving your data...';
   return '';
 });
 </script>

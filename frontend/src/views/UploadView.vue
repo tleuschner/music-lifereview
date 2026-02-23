@@ -50,6 +50,12 @@
             statistics. Checking <strong>"Don't include my data"</strong> skips that entirely —
             your personal dashboard still works normally.
           </p>
+          <p class="privacy-note">
+            All data is automatically deleted after <strong>30 days</strong>. You can also delete
+            it at any time via your dashboard. See our
+            <RouterLink to="/datenschutz" class="privacy-link">Datenschutzerklärung</RouterLink>
+            for full details.
+          </p>
         </div>
 
         <button class="btn btn-primary" :disabled="parsing" @click="startUpload">
@@ -267,6 +273,20 @@ function formatSize(bytes: number): string {
   margin: 0;
   padding-top: 0.6rem;
   border-top: 1px solid #222;
+}
+
+.privacy-note + .privacy-note {
+  border-top: none;
+  padding-top: 0.4rem;
+}
+
+.privacy-link {
+  color: var(--color-primary);
+  text-decoration: none;
+}
+
+.privacy-link:hover {
+  text-decoration: underline;
 }
 
 /* Done state */

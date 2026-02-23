@@ -1,5 +1,6 @@
 import express from "express";
 import cors from "cors";
+import rateLimit from "express-rate-limit";
 import { loadConfig } from "./config/environment.js";
 import { createDatabase } from "./config/database.js";
 import { CryptoTokenGenerator } from "./adapter/outbound/token/CryptoTokenGenerator.js";
@@ -42,8 +43,34 @@ const communityStatsUseCase = new QueryCommunityStatsUseCase(
   entryRepo,
 );
 
+// Rate limiters
+const uploadLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000, // 1 hour
+  max: 5,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many uploads from this IP, please try again later.' },
+});
+
+const statsLimiter = rateLimit({
+  windowMs: 60 * 1000, // 1 minute
+  max: 240,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many requests, please slow down.' },
+});
+
+const communityLimiter = rateLimit({
+  windowMs: 60 * 1000, // 1 minute
+  max: 30,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many requests, please slow down.' },
+});
+
 // Express app
 const app = express();
+app.set('trust proxy', 1); // trust Caddy's X-Forwarded-For
 app.use(cors({ origin: config.corsOrigin }));
 app.use(express.json());
 
@@ -53,15 +80,34 @@ app.get("/api/health", (_req, res) => {
 });
 
 // Routes
+app.use("/api/upload", uploadLimiter);
 app.use("/api", createUploadController(uploadUseCase));
-app.use("/api/stats", createPersonalStatsController(personalStatsUseCase, deleteUploadSessionUseCase));
+app.use("/api/stats", statsLimiter, createPersonalStatsController(personalStatsUseCase, deleteUploadSessionUseCase));
 app.use(
   "/api/community",
+  communityLimiter,
   createCommunityStatsController(communityStatsUseCase),
 );
 
 // Error handling
 app.use(errorHandler);
+
+// Data retention: delete sessions older than 30 days
+const RETENTION_DAYS = 30;
+
+async function runCleanup() {
+  try {
+    const deleted = await sessionRepo.deleteExpiredSessions(RETENTION_DAYS);
+    if (deleted > 0) {
+      console.log(`Cleanup: deleted ${deleted} session(s) older than ${RETENTION_DAYS} days`);
+    }
+  } catch (err) {
+    console.error('Cleanup error:', err);
+  }
+}
+
+runCleanup();
+setInterval(runCleanup, 24 * 60 * 60 * 1000);
 
 app.listen(config.port, () => {
   console.log(`Server running on http://localhost:${config.port}`);

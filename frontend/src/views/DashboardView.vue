@@ -12,8 +12,9 @@
       </div>
 
       <!-- Personality Card -->
-      <div v-if="loadingStates.personalityInputs" class="chart-container card"><LoadingSpinner /></div>
-      <PersonalityCard v-else :data="personalityInputs" :token="token" />
+      <ChartWrapper :loading="loadingStates.personalityInputs" :error="errorStates.personalityInputs">
+        <PersonalityCard :data="personalityInputs" :token="token" />
+      </ChartWrapper>
 
       <!-- Share Link -->
       <ShareLinkCard :url="shareUrl" />
@@ -23,95 +24,123 @@
         :date-from="dateFrom"
         :date-to="dateTo"
         :sort-by="sortBy"
+        :limit="limit"
         :has-active-filters="hasActiveFilters"
         @update:date-from="dateFrom = $event"
         @update:date-to="dateTo = $event"
         @update:sort-by="sortBy = $event as 'hours' | 'count'"
+        @update:limit="limit = $event"
         @reset="resetFilters"
       />
 
       <!-- Charts -->
-      <div v-if="loadingStates.timeline" class="chart-container card"><LoadingSpinner /></div>
-      <ListeningTimelineChart v-else :data="timeline" />
+      <ChartWrapper :loading="loadingStates.timeline" :error="errorStates.timeline">
+        <ListeningTimelineChart :data="timeline" />
+      </ChartWrapper>
 
       <div class="grid grid-2">
-        <div v-if="loadingStates.topArtists" class="chart-container card"><LoadingSpinner /></div>
-        <TopArtistsChart v-else :data="topArtists" :sort-by="sortBy" />
+        <ChartWrapper :loading="loadingStates.topArtists" :error="errorStates.topArtists">
+          <TopArtistsChart :data="topArtists" :sort-by="sortBy" />
+        </ChartWrapper>
 
-        <div v-if="loadingStates.topTracks" class="chart-container card"><LoadingSpinner /></div>
-        <TopTracksChart v-else :data="topTracks" :sort-by="sortBy" />
+        <ChartWrapper :loading="loadingStates.topTracks" :error="errorStates.topTracks">
+          <TopTracksChart :data="topTracks" :sort-by="sortBy" />
+        </ChartWrapper>
       </div>
 
-      <div v-if="loadingStates.heatmap" class="chart-container card"><LoadingSpinner /></div>
-      <HeatmapChart v-else :data="heatmap" />
+      <ChartWrapper :loading="loadingStates.heatmap" :error="errorStates.heatmap">
+        <HeatmapChart :data="heatmap" />
+      </ChartWrapper>
 
-      <div v-if="loadingStates.sessionStamina" class="chart-container card"><LoadingSpinner /></div>
-      <SessionStaminaChart v-else :data="sessionStamina" />
+      <ChartWrapper :loading="loadingStates.sessionStamina" :error="errorStates.sessionStamina">
+        <SessionStaminaChart :data="sessionStamina" />
+      </ChartWrapper>
 
-      <div v-if="loadingStates.weekdayWeekend" class="chart-container card"><LoadingSpinner /></div>
-      <WeekdayWeekendChart v-else :data="weekdayWeekend" />
+      <ChartWrapper :loading="loadingStates.weekdayWeekend" :error="errorStates.weekdayWeekend">
+        <WeekdayWeekendChart :data="weekdayWeekend" />
+      </ChartWrapper>
 
-      <div v-if="loadingStates.marathons" class="chart-container card"><LoadingSpinner /></div>
-      <MarathonChart v-else :data="marathons" />
+      <ChartWrapper :loading="loadingStates.marathons" :error="errorStates.marathons">
+        <MarathonChart :data="marathons" />
+      </ChartWrapper>
 
-      <div v-if="loadingStates.artistTimeline" class="chart-container card"><LoadingSpinner /></div>
-      <StackedArtistAreaChart v-else :data="artistTimeline" />
+      <ChartWrapper :loading="loadingStates.artistTimeline" :error="errorStates.artistTimeline">
+        <StackedArtistAreaChart :data="artistTimeline" />
+      </ChartWrapper>
 
-      <div v-if="loadingStates.trackTimeline" class="chart-container card"><LoadingSpinner /></div>
-      <StackedTrackAreaChart v-else :data="trackTimeline" />
+      <ChartWrapper :loading="loadingStates.trackTimeline" :error="errorStates.trackTimeline">
+        <StackedTrackAreaChart :data="trackTimeline" />
+      </ChartWrapper>
 
-      <div v-if="loadingStates.discoveryRate" class="chart-container card"><LoadingSpinner /></div>
-      <DiscoveryVsRepetitionChart v-else :data="discoveryRate" />
+      <ChartWrapper :loading="loadingStates.discoveryRate" :error="errorStates.discoveryRate">
+        <DiscoveryVsRepetitionChart :data="discoveryRate" />
+      </ChartWrapper>
 
-      <div v-if="loadingStates.artistCumulative" class="chart-container card"><LoadingSpinner /></div>
-      <ArtistRaceChart v-else :data="artistCumulative" />
+      <ChartWrapper :loading="loadingStates.artistCumulative" :error="errorStates.artistCumulative">
+        <ArtistRaceChart :data="artistCumulative" />
+      </ChartWrapper>
 
-      <div v-if="loadingStates.trackCumulative" class="chart-container card"><LoadingSpinner /></div>
-      <TrackRaceChart v-else :data="trackCumulative" />
+      <ChartWrapper :loading="loadingStates.trackCumulative" :error="errorStates.trackCumulative">
+        <TrackRaceChart :data="trackCumulative" />
+      </ChartWrapper>
       <div ref="bmcSentinel" class="bmc-sentinel"></div>
       <BuyMeACoffeePopup ref="bmcPopup" />
 
-      <div v-if="loadingStates.artistLoyalty" class="chart-container card"><LoadingSpinner /></div>
-      <ArtistLoyaltyChart v-else :data="artistLoyalty" />
+      <ChartWrapper :loading="loadingStates.artistLoyalty" :error="errorStates.artistLoyalty">
+        <ArtistLoyaltyChart :data="artistLoyalty" />
+      </ChartWrapper>
 
-      <div v-if="loadingStates.backButtonTracks" class="chart-container card"><LoadingSpinner /></div>
-      <ReplayLeaderboard v-else :data="backButtonTracks" />
+      <ChartWrapper :loading="loadingStates.backButtonTracks" :error="errorStates.backButtonTracks">
+        <ReplayLeaderboard :data="backButtonTracks" />
+      </ChartWrapper>
 
-      <div v-if="loadingStates.skipGraveyard" class="chart-container card"><LoadingSpinner /></div>
-      <SkipGraveyardChart v-else :data="skipGraveyard" />
+      <ChartWrapper :loading="loadingStates.skipGraveyard" :error="errorStates.skipGraveyard">
+        <SkipGraveyardChart :data="skipGraveyard" />
+      </ChartWrapper>
 
-      <div v-if="loadingStates.skippedTracks" class="chart-container card"><LoadingSpinner /></div>
-      <SkippedTracksLeaderboard v-else :data="skippedTracks" />
+      <ChartWrapper :loading="loadingStates.skippedTracks" :error="errorStates.skippedTracks">
+        <SkippedTracksLeaderboard :data="skippedTracks" />
+      </ChartWrapper>
 
-      <div v-if="loadingStates.obsessionTimeline" class="chart-container card"><LoadingSpinner /></div>
-      <ObsessionTimelineChart v-else :data="obsessionTimeline" />
+      <ChartWrapper :loading="loadingStates.obsessionTimeline" :error="errorStates.obsessionTimeline">
+        <ObsessionTimelineChart :data="obsessionTimeline" />
+      </ChartWrapper>
 
-      <div v-if="loadingStates.contentSplit" class="chart-container card"><LoadingSpinner /></div>
-      <PodcastMusicChart v-else :data="contentSplit" />
+      <ChartWrapper :loading="loadingStates.contentSplit" :error="errorStates.contentSplit">
+        <PodcastMusicChart :data="contentSplit" />
+      </ChartWrapper>
 
-      <div v-if="loadingStates.artistIntent" class="chart-container card"><LoadingSpinner /></div>
-      <ArtistIntentChart v-else :data="artistIntent" />
+      <ChartWrapper :loading="loadingStates.artistIntent" :error="errorStates.artistIntent">
+        <ArtistIntentChart :data="artistIntent" />
+      </ChartWrapper>
 
-      <div v-if="loadingStates.trackIntent" class="chart-container card"><LoadingSpinner /></div>
-      <TrackIntentChart v-else :data="trackIntent" />
+      <ChartWrapper :loading="loadingStates.trackIntent" :error="errorStates.trackIntent">
+        <TrackIntentChart :data="trackIntent" />
+      </ChartWrapper>
 
-      <div v-if="loadingStates.albumListeners" class="chart-container card"><LoadingSpinner /></div>
-      <AlbumListenerChart v-else :data="albumListeners" />
+      <ChartWrapper :loading="loadingStates.albumListeners" :error="errorStates.albumListeners">
+        <AlbumListenerChart :data="albumListeners" />
+      </ChartWrapper>
 
-      <div v-if="loadingStates.shuffleSerendipity" class="chart-container card"><LoadingSpinner /></div>
-      <ShuffleSerendipityChart v-else :data="shuffleSerendipity" />
+      <ChartWrapper :loading="loadingStates.shuffleSerendipity" :error="errorStates.shuffleSerendipity">
+        <ShuffleSerendipityChart :data="shuffleSerendipity" />
+      </ChartWrapper>
 
-      <div v-if="loadingStates.introTestTracks" class="chart-container card"><LoadingSpinner /></div>
-      <IntroTestChart v-else :data="introTestTracks" />
+      <ChartWrapper :loading="loadingStates.introTestTracks" :error="errorStates.introTestTracks">
+        <IntroTestChart :data="introTestTracks" />
+      </ChartWrapper>
 
-      <div v-if="loadingStates.artistDiscovery" class="chart-container card"><LoadingSpinner /></div>
-      <DiscoveryAgeMapChart v-else :data="artistDiscovery" />
+      <ChartWrapper :loading="loadingStates.artistDiscovery" :error="errorStates.artistDiscovery">
+        <DiscoveryAgeMapChart :data="artistDiscovery" />
+      </ChartWrapper>
 
-      <div v-if="loadingStates.seasonalArtists" class="chart-container card"><LoadingSpinner /></div>
-      <SeasonalLoyaltyChart v-else :data="seasonalArtists" />
+      <ChartWrapper :loading="loadingStates.seasonalArtists" :error="errorStates.seasonalArtists">
+        <SeasonalLoyaltyChart :data="seasonalArtists" />
+      </ChartWrapper>
 
-      <div v-if="loadingStates.reboundArtists" class="chart-container card"><LoadingSpinner /></div>
-      <ReboundArtistsChart v-else :data="reboundArtists" />
+      <ChartWrapper :loading="loadingStates.reboundArtists" :error="errorStates.reboundArtists">
+        <ReboundArtistsChart :data="reboundArtists" />
+      </ChartWrapper>
 
       <!-- Delete -->
       <div class="delete-section">
@@ -139,6 +168,7 @@ import * as api from '../services/api';
 import { useStreamingData } from '../composables/useStreamingData';
 import { useFilters } from '../composables/useFilters';
 import LoadingSpinner from '../components/shared/LoadingSpinner.vue';
+import ChartWrapper from '../components/shared/ChartWrapper.vue';
 import StatCard from '../components/shared/StatCard.vue';
 import ShareLinkCard from '../components/shared/ShareLinkCard.vue';
 import FilterBar from '../components/filters/FilterBar.vue';
@@ -180,10 +210,11 @@ const bmcSentinel = ref<HTMLElement | null>(null);
 const bmcPopup = ref<{ show: () => void } | null>(null);
 let bmcObserver: IntersectionObserver | null = null;
 
-const { dateFrom, dateTo, sortBy, activeFilters, hasActiveFilters, resetFilters } = useFilters();
+const { dateFrom, dateTo, sortBy, limit, activeFilters, hasActiveFilters, resetFilters } = useFilters();
 
 const {
   loadingStates,
+  errorStates,
   overview,
   topArtists,
   topTracks,

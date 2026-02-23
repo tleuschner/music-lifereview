@@ -16,6 +16,16 @@
           <option value="count">Play Count</option>
         </select>
       </div>
+      <div class="filter-group">
+        <label class="filter-label">Show top</label>
+        <select :value="limit" class="filter-input" @change="$emit('update:limit', Number(($event.target as HTMLSelectElement).value))">
+          <option :value="10">10</option>
+          <option :value="20">20</option>
+          <option :value="30">30</option>
+          <option :value="40">40</option>
+          <option :value="50">50</option>
+        </select>
+      </div>
       <button v-if="hasActiveFilters" class="btn btn-secondary filter-reset" @click="$emit('reset')">
         Reset
       </button>
@@ -28,6 +38,7 @@ defineProps<{
   dateFrom: string | null;
   dateTo: string | null;
   sortBy: 'hours' | 'count';
+  limit: number;
   hasActiveFilters: boolean;
 }>();
 
@@ -35,6 +46,7 @@ defineEmits<{
   'update:dateFrom': [value: string | null];
   'update:dateTo': [value: string | null];
   'update:sortBy': [value: string];
+  'update:limit': [value: number];
   reset: [];
 }>();
 </script>

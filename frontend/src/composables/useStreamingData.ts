@@ -1,4 +1,5 @@
 import { ref, reactive, computed, watch, type Ref } from 'vue';
+import axios from 'axios';
 import type {
   StatsFilter,
   OverviewResponse,
@@ -91,14 +92,50 @@ export function useStreamingData(token: Ref<string>, filters: Ref<StatsFilter>) 
     marathons: false,
   });
 
+  const errorStates = reactive<Record<string, boolean>>({
+    overview: false,
+    topArtists: false,
+    topTracks: false,
+    timeline: false,
+    heatmap: false,
+    artistTimeline: false,
+    discoveryRate: false,
+    skippedTracks: false,
+    artistLoyalty: false,
+    backButtonTracks: false,
+    artistCumulative: false,
+    trackTimeline: false,
+    trackCumulative: false,
+    contentSplit: false,
+    obsessionTimeline: false,
+    sessionStamina: false,
+    artistIntent: false,
+    trackIntent: false,
+    personalityInputs: false,
+    shuffleSerendipity: false,
+    introTestTracks: false,
+    artistDiscovery: false,
+    weekdayWeekend: false,
+    albumListeners: false,
+    skipGraveyard: false,
+    seasonalArtists: false,
+    reboundArtists: false,
+    marathons: false,
+  });
+
   const loading = computed(() => Object.values(loadingStates).some(Boolean));
 
   async function fetchOne<T>(key: string, target: Ref<T>, fetcher: () => Promise<T>) {
     loadingStates[key] = true;
+    errorStates[key] = false;
     try {
       target.value = await fetcher();
     } catch (err) {
-      console.error(`Failed to fetch ${key}:`, err);
+      if (axios.isAxiosError(err) && err.response?.status === 429) {
+        errorStates[key] = true;
+      } else {
+        console.error(`Failed to fetch ${key}:`, err);
+      }
     } finally {
       loadingStates[key] = false;
     }
@@ -157,6 +194,7 @@ export function useStreamingData(token: Ref<string>, filters: Ref<StatsFilter>) 
   return {
     loading,
     loadingStates,
+    errorStates,
     overview,
     topArtists,
     topTracks,

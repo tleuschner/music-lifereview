@@ -90,4 +90,26 @@ export class PostgresUploadSessionRepository implements UploadSessionRepository 
       .del();
     return deleted > 0;
   }
+
+  async deleteExpiredSessions(daysOld: number): Promise<number> {
+    const cutoff = new Date(Date.now() - daysOld * 24 * 60 * 60 * 1000);
+
+    return this.db.transaction(async (trx) => {
+      // marathon_sessions has no FK cascade — delete first
+      const expiring = await trx<{ id: string }>('upload_sessions')
+        .where('created_at', '<', cutoff)
+        .select('id');
+
+      if (expiring.length > 0) {
+        const ids = expiring.map(r => r.id);
+        await trx('marathon_sessions').whereIn('session_id', ids).del();
+      }
+
+      const count = await trx('upload_sessions')
+        .where('created_at', '<', cutoff)
+        .del();
+
+      return count;
+    });
+  }
 }

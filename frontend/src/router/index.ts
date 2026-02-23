@@ -8,5 +8,7 @@ export const router = createRouter({
     { path: '/upload', component: () => import('../views/UploadView.vue') },
     { path: '/results/:token', component: () => import('../views/DashboardView.vue') },
     { path: '/community', component: () => import('../views/CommunityView.vue') },
+    { path: '/impressum', component: () => import('../views/ImpressumView.vue') },
+    { path: '/datenschutz', component: () => import('../views/DatenschutzView.vue') },
   ],
 });

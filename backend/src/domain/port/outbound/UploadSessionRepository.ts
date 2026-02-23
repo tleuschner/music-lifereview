@@ -7,4 +7,5 @@ export interface UploadSessionRepository {
   countAll(): Promise<number>;
   deactivatePreviousSessions(userHash: string, currentSessionId: string): Promise<void>;
   deleteByToken(token: string): Promise<boolean>;
+  deleteExpiredSessions(daysOld: number): Promise<number>;
 }

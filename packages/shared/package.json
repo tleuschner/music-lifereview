@@ -9,11 +9,5 @@
   },
   "devDependencies": {
     "typescript": "^5.6.0"
-  },
-  "exports": {
-    ".": {
-      "import": "./dist/index.js",
-      "require": "./dist/index.js"
-    }
   }
 }

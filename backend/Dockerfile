@@ -7,6 +7,7 @@ COPY package.json package-lock.json ./
 COPY packages/shared/package.json ./packages/shared/
 COPY backend/package.json ./backend/
 COPY frontend/package.json ./frontend/
+COPY package.json package-lock.json tsconfig.base.json ./
 
 RUN npm ci
 

@@ -33,25 +33,19 @@ A web application that analyzes your Spotify Extended Streaming History. Upload 
 
 ### Prerequisites
 
-- Node.js 20+
+- Node.js 22+
 - Docker (for PostgreSQL)
 
 ### Setup
 
 ```bash
-# Start PostgreSQL
-docker compose up -d
-
-# Install dependencies
 npm install
-
-# Run database migrations
-npm run migrate --workspace=backend
-
-# Start development servers
-npm run dev:backend   # http://localhost:3000
-npm run dev:frontend  # http://localhost:5173
+npm run dev
 ```
+
+This starts PostgreSQL via Docker Compose, then runs the backend (`:3000`) and frontend (`:5173`) in parallel. Open [http://localhost:5173](http://localhost:5173).
+
+> Migrations run automatically on backend startup.
 
 ## Project Structure
 

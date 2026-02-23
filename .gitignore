@@ -43,3 +43,6 @@ pgdata/
 
 # Logs
 *.log
+
+# Local deployment notes
+deployment.md

@@ -4,12 +4,10 @@ import { resolve } from 'path';
 
 export default defineConfig({
   plugins: [vue()],
-  optimizeDeps: {
-    include: ['@music-livereview/shared'],
-  },
   resolve: {
     alias: {
       '@': resolve(__dirname, 'src'),
+      '@music-livereview/shared': resolve(__dirname, '../packages/shared/src/index.ts'),
     },
   },
   server: {

@@ -100,7 +100,7 @@ const chartOptions: ChartOptions<'line'> = {
     legend: { display: false },
     tooltip: {
       callbacks: {
-        label: (ctx) => ` ${ctx.dataset.label}: ${ctx.parsed.y.toLocaleString(undefined, { maximumFractionDigits: 1 })}h total`,
+        label: (ctx) => ` ${ctx.dataset.label}: ${ctx.parsed?.y?.toLocaleString(undefined, { maximumFractionDigits: 1 })}h total`,
       },
     },
   },

@@ -200,6 +200,28 @@ export interface SeasonalArtistEntry {
   activeYears: number;  // distinct years where they had plays in their peak season
 }
 
+export interface ReboundArtistEntry {
+  artistName: string;
+  peakMonth: string;       // YYYY-MM — last high-activity month before gap
+  peakPlays: number;
+  cooldownMonths: number;  // months of silence between peak and revival
+  revivalMonth: string;    // YYYY-MM — first month back
+  revivalPlays: number;
+  reboundScore: number;    // peak_plays × cooldown_months × revival_plays
+}
+
+export interface MarathonEntry {
+  rank: number;
+  date: string;            // "YYYY-MM-DD" UTC date of session start
+  durationMinutes: number; // wall-clock duration in minutes
+  playCount: number;       // number of tracks in the session
+  skipRate: number;        // 0–100 percentage
+  mood: string;            // "In the Zone" | "Exploratory" | "Restless"
+  topArtist: string | null;
+  topTrack: string | null;
+  topTrackArtist: string | null;
+}
+
 export interface AlbumListenerEntry {
   name: string;
   totalPlays: number;

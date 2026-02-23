@@ -1,0 +1,13 @@
+yourdomain.com, www.yourdomain.com {
+    # Proxy API requests to the backend container
+    handle /api/* {
+        reverse_proxy backend:3000
+    }
+
+    # Serve the Vue SPA — fallback to index.html for client-side routing
+    handle {
+        root * /srv/frontend
+        try_files {path} /index.html
+        file_server
+    }
+}

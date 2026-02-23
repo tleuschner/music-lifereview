@@ -1,0 +1,14 @@
+node_modules
+dist
+*.tsbuildinfo
+frontend/dist
+.env
+.env.*
+!.env.example
+pgdata
+*.log
+.DS_Store
+._*
+.venv
+*.ipynb
+__pycache__

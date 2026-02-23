@@ -9,6 +9,7 @@ import { PostgresAggregatedStatsStore } from "./adapter/outbound/persistence/Pos
 import { UploadStreamingHistoryUseCase } from "./application/UploadStreamingHistoryUseCase.js";
 import { QueryPersonalStatsUseCase } from "./application/QueryPersonalStatsUseCase.js";
 import { QueryCommunityStatsUseCase } from "./application/QueryCommunityStatsUseCase.js";
+import { DeleteUploadSessionUseCase } from "./application/DeleteUploadSessionUseCase.js";
 import { createUploadController } from "./adapter/inbound/http/UploadController.js";
 import { createPersonalStatsController } from "./adapter/inbound/http/PersonalStatsController.js";
 import { createCommunityStatsController } from "./adapter/inbound/http/CommunityStatsController.js";
@@ -34,6 +35,7 @@ const personalStatsUseCase = new QueryPersonalStatsUseCase(
   sessionRepo,
   entryRepo,
 );
+const deleteUploadSessionUseCase = new DeleteUploadSessionUseCase(sessionRepo);
 const communityStatsUseCase = new QueryCommunityStatsUseCase(
   statsStore,
   sessionRepo,
@@ -52,7 +54,7 @@ app.get("/api/health", (_req, res) => {
 
 // Routes
 app.use("/api", createUploadController(uploadUseCase, config.maxUploadSizeMb));
-app.use("/api/stats", createPersonalStatsController(personalStatsUseCase));
+app.use("/api/stats", createPersonalStatsController(personalStatsUseCase, deleteUploadSessionUseCase));
 app.use(
   "/api/community",
   createCommunityStatsController(communityStatsUseCase),

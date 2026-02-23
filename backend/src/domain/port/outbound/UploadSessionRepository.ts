@@ -6,4 +6,5 @@ export interface UploadSessionRepository {
   findById(id: string): Promise<UploadSession | null>;
   countAll(): Promise<number>;
   deactivatePreviousSessions(userHash: string, currentSessionId: string): Promise<void>;
+  deleteByToken(token: string): Promise<boolean>;
 }

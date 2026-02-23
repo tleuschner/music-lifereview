@@ -25,6 +25,8 @@ import type {
   AlbumListenerEntry,
   SkipGraveyardEntry,
   SeasonalArtistEntry,
+  ReboundArtistEntry,
+  MarathonEntry,
 } from '@music-livereview/shared';
 import * as api from '../services/api';
 
@@ -55,6 +57,8 @@ export function useStreamingData(token: Ref<string>, filters: Ref<StatsFilter>) 
   const albumListeners = ref<AlbumListenerEntry[]>([]);
   const skipGraveyard = ref<SkipGraveyardEntry[]>([]);
   const seasonalArtists = ref<SeasonalArtistEntry[]>([]);
+  const reboundArtists = ref<ReboundArtistEntry[]>([]);
+  const marathons = ref<MarathonEntry[]>([]);
 
   const loadingStates = reactive<Record<string, boolean>>({
     overview: false,
@@ -83,6 +87,8 @@ export function useStreamingData(token: Ref<string>, filters: Ref<StatsFilter>) 
     albumListeners: false,
     skipGraveyard: false,
     seasonalArtists: false,
+    reboundArtists: false,
+    marathons: false,
   });
 
   const loading = computed(() => Object.values(loadingStates).some(Boolean));
@@ -129,6 +135,8 @@ export function useStreamingData(token: Ref<string>, filters: Ref<StatsFilter>) 
       () => fetchOne('albumListeners', albumListeners, () => api.getAlbumListeners(token.value, f)),
       () => fetchOne('skipGraveyard', skipGraveyard, () => api.getSkipGraveyard(token.value, f)),
       () => fetchOne('seasonalArtists', seasonalArtists, () => api.getSeasonalArtists(token.value)),
+      () => fetchOne('reboundArtists', reboundArtists, () => api.getReboundArtists(token.value, f)),
+      () => fetchOne('marathons', marathons, () => api.getMarathons(token.value, f)),
     ];
 
     // Run up to 8 requests concurrently. Unlike fixed batches, this keeps
@@ -175,6 +183,8 @@ export function useStreamingData(token: Ref<string>, filters: Ref<StatsFilter>) 
     albumListeners,
     skipGraveyard,
     seasonalArtists,
+    reboundArtists,
+    marathons,
     fetchAll,
   };
 }

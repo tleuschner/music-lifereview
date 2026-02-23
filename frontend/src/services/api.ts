@@ -30,6 +30,8 @@ import type {
   AlbumListenerEntry,
   SkipGraveyardEntry,
   SeasonalArtistEntry,
+  ReboundArtistEntry,
+  MarathonEntry,
 } from '@music-livereview/shared';
 import { PII_FIELDS } from '@music-livereview/shared';
 
@@ -221,8 +223,22 @@ export async function getSeasonalArtists(token: string): Promise<SeasonalArtistE
   return data;
 }
 
+export async function getReboundArtists(token: string, filters: StatsFilter = {}): Promise<ReboundArtistEntry[]> {
+  const { data } = await http.get(`/stats/${token}/rebound-artists`, { params: filterParams(filters) });
+  return data;
+}
+
+export async function getMarathons(token: string, filters: StatsFilter = {}): Promise<MarathonEntry[]> {
+  const { data } = await http.get(`/stats/${token}/marathons`, { params: filterParams(filters) });
+  return data;
+}
+
 export async function recordPersonality(token: string, personalityId: string): Promise<void> {
   await http.post(`/stats/${token}/personality/record`, { personalityId });
+}
+
+export async function deleteSession(token: string): Promise<void> {
+  await http.delete(`/stats/${token}`);
 }
 
 export async function getPersonalityDistribution(): Promise<PersonalityDistributionResponse> {

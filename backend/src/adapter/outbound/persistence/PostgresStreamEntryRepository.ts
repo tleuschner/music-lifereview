@@ -26,6 +26,8 @@ import type {
   AlbumListenerRow,
   SkipGraveyardRow,
   SeasonalArtistRow,
+  ReboundArtistRow,
+  MarathonRow,
 } from '../../../domain/port/outbound/StreamEntryRepository.js';
 
 export class PostgresStreamEntryRepository implements StreamEntryRepository {
@@ -110,6 +112,27 @@ export class PostgresStreamEntryRepository implements StreamEntryRepository {
           shuffle_count: b.shuffleCount,
         }));
         await trx('monthly_listen_totals').insert(batch);
+      }
+
+      // Marathon sessions — chunked to avoid pg's 65535 bind-parameter limit
+      if (data.marathons.length > 0) {
+        const rows = data.marathons.map(m => ({
+          session_id: sessionId,
+          start_time: m.startTime,
+          end_time: m.endTime,
+          duration_ms: m.durationMs,
+          play_count: m.playCount,
+          skip_count: m.skipCount,
+          skip_rate: m.skipRate,
+          top_artist: m.topArtist,
+          top_track: m.topTrack,
+          top_track_artist: m.topTrackArtist,
+          rank: m.rank,
+        }));
+        const CHUNK = 500;
+        for (let i = 0; i < rows.length; i += CHUNK) {
+          await trx('marathon_sessions').insert(rows.slice(i, i + CHUNK));
+        }
       }
 
     });
@@ -1408,6 +1431,132 @@ export class PostgresStreamEntryRepository implements StreamEntryRepository {
       totalPlays: Number(r.total_plays),
       peakPct: Number(r.peak_pct),
       activeYears: Number(r.active_years),
+    }));
+  }
+
+  async getReboundArtists(sessionId: string, limit: number): Promise<ReboundArtistRow[]> {
+    const sql = `
+      WITH artist_monthly AS (
+        SELECT
+          a.artist_id,
+          ac.artist_name,
+          a.month,
+          a.play_count,
+          LEAD(a.month)       OVER (PARTITION BY a.artist_id ORDER BY a.month) AS next_active_month,
+          LEAD(a.play_count)  OVER (PARTITION BY a.artist_id ORDER BY a.month) AS revival_plays
+        FROM monthly_artist_stats a
+        JOIN artist_catalog ac ON a.artist_id = ac.id
+        WHERE a.session_id = ?
+      ),
+      gaps AS (
+        SELECT
+          artist_name,
+          month                                                                    AS peak_month,
+          play_count                                                               AS peak_plays,
+          next_active_month                                                        AS revival_month,
+          revival_plays,
+          (
+            (EXTRACT(YEAR  FROM next_active_month) - EXTRACT(YEAR  FROM month)) * 12 +
+            (EXTRACT(MONTH FROM next_active_month) - EXTRACT(MONTH FROM month)) - 1
+          )::int                                                                   AS cooldown_months
+        FROM artist_monthly
+        WHERE next_active_month IS NOT NULL
+          AND play_count      >= 5
+          AND revival_plays   >= 3
+          AND (
+            (EXTRACT(YEAR  FROM next_active_month) - EXTRACT(YEAR  FROM month)) * 12 +
+            (EXTRACT(MONTH FROM next_active_month) - EXTRACT(MONTH FROM month))
+          ) >= 4
+      ),
+      best_per_artist AS (
+        SELECT DISTINCT ON (artist_name)
+          artist_name,
+          to_char(peak_month,    'YYYY-MM')              AS peak_month,
+          peak_plays::integer,
+          cooldown_months,
+          to_char(revival_month, 'YYYY-MM')              AS revival_month,
+          revival_plays::integer,
+          (peak_plays::float * cooldown_months * revival_plays) AS rebound_score
+        FROM gaps
+        ORDER BY artist_name, (peak_plays::float * cooldown_months * revival_plays) DESC
+      )
+      SELECT *
+      FROM best_per_artist
+      ORDER BY rebound_score DESC
+      LIMIT ?
+    `;
+
+    const result = await this.db.raw(sql, [sessionId, limit]);
+    return result.rows.map((r: {
+      artist_name: string;
+      peak_month: string;
+      peak_plays: string;
+      cooldown_months: string;
+      revival_month: string;
+      revival_plays: string;
+      rebound_score: string;
+    }) => ({
+      artistName: r.artist_name,
+      peakMonth: r.peak_month,
+      peakPlays: Number(r.peak_plays),
+      cooldownMonths: Number(r.cooldown_months),
+      revivalMonth: r.revival_month,
+      revivalPlays: Number(r.revival_plays),
+      reboundScore: Math.round(Number(r.rebound_score)),
+    }));
+  }
+
+  async getMarathons(sessionId: string, filters: StatsFilter): Promise<MarathonRow[]> {
+    // When date filters are active we re-rank the filtered subset by duration.
+    // Without filters we return the pre-stored all-time ranks.
+    const hasFilter = filters.from || filters.to;
+    const sql = `
+      SELECT
+        start_time,
+        end_time,
+        duration_ms,
+        play_count,
+        skip_count,
+        skip_rate,
+        top_artist,
+        top_track,
+        top_track_artist,
+        ${hasFilter
+          ? "ROW_NUMBER() OVER (ORDER BY duration_ms DESC)::integer AS rank"
+          : 'rank'}
+      FROM marathon_sessions
+      WHERE session_id = ?
+        ${filters.from ? "AND date_trunc('month', start_time) >= date_trunc('month', ?::date)" : ''}
+        ${filters.to   ? "AND date_trunc('month', start_time) <= date_trunc('month', ?::date)" : ''}
+      ORDER BY duration_ms DESC
+      LIMIT 20
+    `;
+    const bindings: unknown[] = [sessionId];
+    if (filters.from) bindings.push(filters.from);
+    if (filters.to) bindings.push(filters.to);
+    const result = await this.db.raw(sql, bindings);
+    return result.rows.map((r: {
+      start_time: Date;
+      end_time: Date;
+      duration_ms: string;
+      play_count: string;
+      skip_count: string;
+      skip_rate: string;
+      top_artist: string | null;
+      top_track: string | null;
+      top_track_artist: string | null;
+      rank: string;
+    }) => ({
+      startTime: new Date(r.start_time),
+      endTime: new Date(r.end_time),
+      durationMs: Number(r.duration_ms),
+      playCount: Number(r.play_count),
+      skipCount: Number(r.skip_count),
+      skipRate: Number(r.skip_rate),
+      topArtist: r.top_artist,
+      topTrack: r.top_track,
+      topTrackArtist: r.top_track_artist,
+      rank: Number(r.rank),
     }));
   }
 

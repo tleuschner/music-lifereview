@@ -83,4 +83,11 @@ export class PostgresUploadSessionRepository implements UploadSessionRepository 
       .where('is_active', true)
       .update({ is_active: false, updated_at: new Date() });
   }
+
+  async deleteByToken(token: string): Promise<boolean> {
+    const deleted = await this.db('upload_sessions')
+      .where('share_token', token)
+      .del();
+    return deleted > 0;
+  }
 }

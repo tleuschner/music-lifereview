@@ -51,6 +51,9 @@
       <div v-if="loadingStates.weekdayWeekend" class="chart-container card"><LoadingSpinner /></div>
       <WeekdayWeekendChart v-else :data="weekdayWeekend" />
 
+      <div v-if="loadingStates.marathons" class="chart-container card"><LoadingSpinner /></div>
+      <MarathonChart v-else :data="marathons" />
+
       <div v-if="loadingStates.artistTimeline" class="chart-container card"><LoadingSpinner /></div>
       <StackedArtistAreaChart v-else :data="artistTimeline" />
 
@@ -106,13 +109,33 @@
 
       <div v-if="loadingStates.seasonalArtists" class="chart-container card"><LoadingSpinner /></div>
       <SeasonalLoyaltyChart v-else :data="seasonalArtists" />
+
+      <div v-if="loadingStates.reboundArtists" class="chart-container card"><LoadingSpinner /></div>
+      <ReboundArtistsChart v-else :data="reboundArtists" />
+
+      <!-- Delete -->
+      <div class="delete-section">
+        <template v-if="!showDeleteConfirm">
+          <button class="btn btn-danger" @click="showDeleteConfirm = true">Delete my data</button>
+        </template>
+        <template v-else>
+          <p class="delete-warning">This will permanently delete all your listening data. This cannot be undone.</p>
+          <div class="delete-actions">
+            <button class="btn btn-secondary" :disabled="isDeleting" @click="showDeleteConfirm = false">Cancel</button>
+            <button class="btn btn-danger" :disabled="isDeleting" @click="confirmDelete">
+              {{ isDeleting ? 'Deleting...' : 'Yes, delete everything' }}
+            </button>
+          </div>
+        </template>
+      </div>
     </template>
   </div>
 </template>
 
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
-import { useRoute } from 'vue-router';
+import { useRoute, useRouter } from 'vue-router';
+import * as api from '../services/api';
 import { useStreamingData } from '../composables/useStreamingData';
 import { useFilters } from '../composables/useFilters';
 import LoadingSpinner from '../components/shared/LoadingSpinner.vue';
@@ -144,9 +167,12 @@ import PersonalityCard from '../components/charts/PersonalityCard.vue';
 import WeekdayWeekendChart from '../components/charts/WeekdayWeekendChart.vue';
 import AlbumListenerChart from '../components/charts/AlbumListenerChart.vue';
 import SeasonalLoyaltyChart from '../components/charts/SeasonalLoyaltyChart.vue';
+import ReboundArtistsChart from '../components/charts/ReboundArtistsChart.vue';
+import MarathonChart from '../components/charts/MarathonChart.vue';
 import BuyMeACoffeePopup from '../components/shared/BuyMeACoffeePopup.vue';
 
 const route = useRoute();
+const router = useRouter();
 const token = computed(() => route.params.token as string);
 const shareUrl = computed(() => `${window.location.origin}/results/${token.value}`);
 
@@ -183,11 +209,26 @@ const {
   albumListeners,
   skipGraveyard,
   seasonalArtists,
+  reboundArtists,
+  marathons,
   personalityInputs,
   fetchAll,
 } = useStreamingData(token, activeFilters);
 
 onMounted(() => fetchAll());
+
+const showDeleteConfirm = ref(false);
+const isDeleting = ref(false);
+
+async function confirmDelete() {
+  isDeleting.value = true;
+  try {
+    await api.deleteSession(token.value);
+    router.push('/');
+  } finally {
+    isDeleting.value = false;
+  }
+}
 
 watch(bmcSentinel, (el) => {
   if (el && !bmcObserver) {
@@ -217,5 +258,41 @@ onUnmounted(() => bmcObserver?.disconnect());
 .bmc-sentinel {
   height: 0;
   visibility: hidden;
+}
+
+.delete-section {
+  padding-top: 1rem;
+  border-top: 1px solid var(--color-border);
+}
+
+.delete-warning {
+  color: var(--color-text-secondary);
+  font-size: 0.875rem;
+  margin-bottom: 0.75rem;
+}
+
+.delete-actions {
+  display: flex;
+  gap: 0.75rem;
+}
+
+.btn-danger {
+  background: #c0392b;
+  color: #fff;
+  border: none;
+}
+
+.btn-danger:hover:not(:disabled) {
+  background: #a93226;
+}
+
+.btn-secondary {
+  background: var(--color-surface);
+  color: var(--color-text);
+  border: 1px solid var(--color-border);
+}
+
+.btn-secondary:hover:not(:disabled) {
+  background: var(--color-border);
 }
 </style>

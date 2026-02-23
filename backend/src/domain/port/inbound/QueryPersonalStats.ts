@@ -24,6 +24,8 @@ import type {
   AlbumListenerEntry,
   SkipGraveyardEntry,
   SeasonalArtistEntry,
+  ReboundArtistEntry,
+  MarathonEntry,
 } from '@music-livereview/shared';
 
 export interface QueryPersonalStats {
@@ -54,4 +56,6 @@ export interface QueryPersonalStats {
   getAlbumListeners(token: string, filters: StatsFilter): Promise<AlbumListenerEntry[] | null>;
   getSkipGraveyard(token: string, limit: number): Promise<SkipGraveyardEntry[] | null>;
   getSeasonalArtists(token: string): Promise<SeasonalArtistEntry[] | null>;
+  getReboundArtists(token: string, limit: number): Promise<ReboundArtistEntry[] | null>;
+  getMarathons(token: string, filters: StatsFilter): Promise<MarathonEntry[] | null>;
 }

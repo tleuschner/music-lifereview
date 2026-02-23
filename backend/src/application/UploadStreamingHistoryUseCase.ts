@@ -11,6 +11,7 @@ import type {
   MonthlyHourlyStatsBucket,
   TrackFirstPlay,
   MonthlyTotalBucket,
+  MarathonBucket,
 } from '../domain/port/outbound/StreamEntryRepository.js';
 import type { TokenGenerator } from '../domain/port/outbound/TokenGenerator.js';
 import type { AggregatedStatsStore } from '../domain/port/outbound/AggregatedStatsStore.js';
@@ -325,6 +326,100 @@ export class UploadStreamingHistoryUseCase implements UploadStreamingHistory {
       recordChain(chainStartTs, chainLength);
     }
 
+    // Marathon detection — continuous listening sessions with no gap > 30 min
+    const MARATHON_GAP_MS = 30 * 60 * 1000;
+    const MARATHON_MIN_TRACKS = 3;
+    const MARATHON_MIN_DURATION_MS = 30 * 60 * 1000;
+
+    const allMarathons: MarathonBucket[] = [];
+
+    if (sorted.length > 0) {
+      let sessionStartMs = new Date(sorted[0].ts).getTime() - (sorted[0].ms_played ?? 0);
+      let sessionEntries: typeof sorted = [sorted[0]];
+
+      const finalizeSession = () => {
+        const last = sessionEntries[sessionEntries.length - 1];
+        const endMs = new Date(last.ts).getTime();
+        const durationMs = endMs - sessionStartMs;
+
+        if (sessionEntries.length < MARATHON_MIN_TRACKS || durationMs < MARATHON_MIN_DURATION_MS) return;
+
+        let plays = 0;
+        let skips = 0;
+        const artistMs = new Map<string, number>();
+        const trackPlays = new Map<string, { track: string; artist: string; plays: number }>();
+
+        for (const e of sessionEntries) {
+          plays++;
+          if (e.skipped) skips++;
+          if (e.master_metadata_album_artist_name) {
+            artistMs.set(
+              e.master_metadata_album_artist_name,
+              (artistMs.get(e.master_metadata_album_artist_name) ?? 0) + (e.ms_played ?? 0),
+            );
+          }
+          if (e.master_metadata_track_name && e.master_metadata_album_artist_name) {
+            const key = `${e.master_metadata_track_name}\0${e.master_metadata_album_artist_name}`;
+            const existing = trackPlays.get(key);
+            if (existing) { existing.plays++; }
+            else { trackPlays.set(key, { track: e.master_metadata_track_name, artist: e.master_metadata_album_artist_name, plays: 1 }); }
+          }
+        }
+
+        let topArtist: string | null = null;
+        let topArtistMs = 0;
+        for (const [name, ms] of artistMs) {
+          if (ms > topArtistMs) { topArtistMs = ms; topArtist = name; }
+        }
+
+        let topTrack: string | null = null;
+        let topTrackArtist: string | null = null;
+        let topTrackPlays = 0;
+        for (const v of trackPlays.values()) {
+          if (v.plays > topTrackPlays) { topTrackPlays = v.plays; topTrack = v.track; topTrackArtist = v.artist; }
+        }
+
+        const skipRate = plays > 0 ? Math.round(skips / plays * 1000) / 10 : 0;
+        allMarathons.push({
+          startTime: new Date(sessionStartMs),
+          endTime: new Date(endMs),
+          durationMs,
+          playCount: plays,
+          skipCount: skips,
+          skipRate,
+          topArtist,
+          topTrack,
+          topTrackArtist,
+          rank: 0,
+        });
+      };
+
+      for (let i = 1; i < sorted.length; i++) {
+        // gap = start of track[i]  −  end of track[i-1]
+        //     = (ts[i] − ms_played[i])  −  ts[i-1]
+        // Using end-to-end timestamps was wrong: a 90-min podcast looks like a 90-min silence.
+        const startOfCurrent = new Date(sorted[i].ts).getTime() - (sorted[i].ms_played ?? 0);
+        const endOfPrevious  = new Date(sorted[i - 1].ts).getTime();
+        const gap = Math.max(0, startOfCurrent - endOfPrevious);
+        if (gap > MARATHON_GAP_MS) {
+          finalizeSession();
+          sessionStartMs = new Date(sorted[i].ts).getTime() - (sorted[i].ms_played ?? 0);
+          sessionEntries = [sorted[i]];
+        } else {
+          sessionEntries.push(sorted[i]);
+        }
+      }
+      finalizeSession();
+    }
+
+    // Store all marathons sorted by duration — no slice.
+    // The query layer applies LIMIT 20 per date-filtered request, so any
+    // time-range filter sees the top 20 within that range rather than being
+    // limited to whichever all-time top 20 happened to fall in the window.
+    allMarathons.sort((a, b) => b.durationMs - a.durationMs);
+    const marathonBuckets: MarathonBucket[] = allMarathons;
+    for (let i = 0; i < marathonBuckets.length; i++) marathonBuckets[i].rank = i + 1;
+
     // Convert maps to bucket arrays
     const artistBuckets: MonthlyArtistBucket[] = [];
     for (const [key, val] of artistMonthly) {
@@ -395,6 +490,7 @@ export class UploadStreamingHistoryUseCase implements UploadStreamingHistory {
         hourlyStatsBuckets,
         trackFirstPlays: [],  // filled by processEntries after catalog upsert
         monthlyTotals: monthlyTotalBuckets,
+        marathons: marathonBuckets,
       },
     };
   }

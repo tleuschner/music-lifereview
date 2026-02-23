@@ -2,6 +2,7 @@ import { Router } from 'express';
 import type { StatsFilter } from '@music-livereview/shared';
 import { DEFAULT_TOP_LIMIT, DEFAULT_ARTIST_TIMELINE_LIMIT } from '@music-livereview/shared';
 import type { QueryPersonalStats } from '../../../domain/port/inbound/QueryPersonalStats.js';
+import type { DeleteUploadSession } from '../../../domain/port/inbound/DeleteUploadSession.js';
 
 function parseFilters(query: Record<string, unknown>): StatsFilter {
   return {
@@ -13,7 +14,7 @@ function parseFilters(query: Record<string, unknown>): StatsFilter {
   };
 }
 
-export function createPersonalStatsController(useCase: QueryPersonalStats): Router {
+export function createPersonalStatsController(useCase: QueryPersonalStats, deleteUseCase: DeleteUploadSession): Router {
   const router = Router();
 
   const handle = (fn: (token: string, filters: StatsFilter) => Promise<unknown>) => {
@@ -57,6 +58,8 @@ export function createPersonalStatsController(useCase: QueryPersonalStats): Rout
   router.get('/:token/album-listeners', handle((t, f) => useCase.getAlbumListeners(t, f)));
   router.get('/:token/skip-graveyard', handle((t, f) => useCase.getSkipGraveyard(t, f.limit ?? 50)));
   router.get('/:token/seasonal-artists', handle((t) => useCase.getSeasonalArtists(t)));
+  router.get('/:token/rebound-artists', handle((t, f) => useCase.getReboundArtists(t, f.limit ?? 20)));
+  router.get('/:token/marathons', handle((t, f) => useCase.getMarathons(t, f)));
 
   router.post('/:token/personality/record', async (req, res, next) => {
     try {
@@ -68,6 +71,19 @@ export function createPersonalStatsController(useCase: QueryPersonalStats): Rout
       const ok = await useCase.recordPersonality(req.params.token, personalityId);
       if (!ok) {
         res.status(404).json({ error: 'Session not found or not completed' });
+        return;
+      }
+      res.status(204).end();
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  router.delete('/:token', async (req, res, next) => {
+    try {
+      const { deleted } = await deleteUseCase.execute(req.params.token);
+      if (!deleted) {
+        res.status(404).json({ error: 'Session not found' });
         return;
       }
       res.status(204).end();

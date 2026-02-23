@@ -25,6 +25,8 @@ import type {
   AlbumListenerEntry,
   SkipGraveyardEntry,
   SeasonalArtistEntry,
+  ReboundArtistEntry,
+  MarathonEntry,
 } from '@music-livereview/shared';
 import type { QueryPersonalStats } from '../domain/port/inbound/QueryPersonalStats.js';
 import type { UploadSessionRepository } from '../domain/port/outbound/UploadSessionRepository.js';
@@ -428,6 +430,44 @@ export class QueryPersonalStatsUseCase implements QueryPersonalStats {
       peakPct: r.peakPct,
       activeYears: r.activeYears,
     }));
+  }
+
+  async getReboundArtists(token: string, limit: number): Promise<ReboundArtistEntry[] | null> {
+    const sessionId = await this.resolveSessionId(token);
+    if (!sessionId) return null;
+
+    const rows = await this.entryRepo.getReboundArtists(sessionId, limit);
+    return rows.map(r => ({
+      artistName: r.artistName,
+      peakMonth: r.peakMonth,
+      peakPlays: r.peakPlays,
+      cooldownMonths: r.cooldownMonths,
+      revivalMonth: r.revivalMonth,
+      revivalPlays: r.revivalPlays,
+      reboundScore: r.reboundScore,
+    }));
+  }
+
+  async getMarathons(token: string, filters: StatsFilter): Promise<MarathonEntry[] | null> {
+    const sessionId = await this.resolveSessionId(token);
+    if (!sessionId) return null;
+
+    const rows = await this.entryRepo.getMarathons(sessionId, filters);
+    return rows.map(r => {
+      const mood = r.skipRate < 10 ? 'In the Zone' : r.skipRate < 25 ? 'Exploratory' : 'Restless';
+      const date = r.startTime.toISOString().slice(0, 10);
+      return {
+        rank: r.rank,
+        date,
+        durationMinutes: Math.round(r.durationMs / 60000),
+        playCount: r.playCount,
+        skipRate: r.skipRate,
+        mood,
+        topArtist: r.topArtist,
+        topTrack: r.topTrack,
+        topTrackArtist: r.topTrackArtist,
+      };
+    });
   }
 
   async getWeekdayWeekend(token: string, filters: StatsFilter): Promise<WeekdayWeekendResponse | null> {

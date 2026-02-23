@@ -176,6 +176,16 @@ export interface SeasonalArtistRow {
   activeYears: number;
 }
 
+export interface ReboundArtistRow {
+  artistName: string;
+  peakMonth: string;
+  peakPlays: number;
+  cooldownMonths: number;
+  revivalMonth: string;
+  revivalPlays: number;
+  reboundScore: number;
+}
+
 export interface AlbumListenerRow {
   artistName: string;
   totalPlays: number;
@@ -235,12 +245,39 @@ export interface StaminaRow {
   chainCount: number;
 }
 
+export interface MarathonBucket {
+  startTime: Date;
+  endTime: Date;
+  durationMs: number;   // wall-clock duration (endTime - startTime)
+  playCount: number;
+  skipCount: number;
+  skipRate: number;     // 0–100
+  topArtist: string | null;
+  topTrack: string | null;
+  topTrackArtist: string | null;
+  rank: number;         // 1–10
+}
+
+export interface MarathonRow {
+  startTime: Date;
+  endTime: Date;
+  durationMs: number;
+  playCount: number;
+  skipCount: number;
+  skipRate: number;
+  topArtist: string | null;
+  topTrack: string | null;
+  topTrackArtist: string | null;
+  rank: number;
+}
+
 export interface AggregatedIngestData {
   artistBuckets: MonthlyArtistBucket[];
   trackBuckets: MonthlyTrackBucket[];
   hourlyStatsBuckets: MonthlyHourlyStatsBucket[];
   trackFirstPlays: TrackFirstPlay[];
   monthlyTotals: MonthlyTotalBucket[];
+  marathons: MarathonBucket[];
 }
 
 export interface StreamEntryRepository {
@@ -273,6 +310,8 @@ export interface StreamEntryRepository {
   getAlbumListeners(sessionId: string, filters: StatsFilter): Promise<AlbumListenerRow[]>;
   getSkipGraveyard(sessionId: string, limit: number): Promise<SkipGraveyardRow[]>;
   getSeasonalArtists(sessionId: string): Promise<SeasonalArtistRow[]>;
+  getReboundArtists(sessionId: string, limit: number): Promise<ReboundArtistRow[]>;
+  getMarathons(sessionId: string, filters: StatsFilter): Promise<MarathonRow[]>;
 
   upsertArtistCatalog(artists: Array<{ artistName: string }>): Promise<Map<string, number>>;
   upsertTrackCatalog(tracks: Array<{ trackName: string; artistName: string; albumName: string | null; spotifyTrackUri: string | null }>, artistIdMap: Map<string, number>): Promise<Map<string, number>>;

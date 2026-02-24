@@ -406,7 +406,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref, watch } from "vue";
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import * as api from "../services/api";
 import { useStreamingData } from "../composables/useStreamingData";
@@ -527,6 +527,20 @@ const {
 } = useStreamingData(token, activeFilters);
 
 onMounted(() => fetchAll());
+
+// Scroll to hash anchor once overview data is available (browser fires the
+// native scroll before v-if renders the elements, so we do it manually).
+watch(overview, (val) => {
+  if (!val) return;
+  const hash = window.location.hash.slice(1);
+  if (!hash) return;
+  nextTick(() => {
+    const el = document.getElementById(hash);
+    if (!el) return;
+    const top = el.getBoundingClientRect().top + window.scrollY - 80;
+    window.scrollTo({ top, behavior: 'instant' });
+  });
+}, { once: true });
 
 const showDeleteConfirm = ref(false);
 const isDeleting = ref(false);

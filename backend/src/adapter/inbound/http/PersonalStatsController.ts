@@ -9,7 +9,7 @@ function parseFilters(query: Record<string, unknown>): StatsFilter {
     from: typeof query.from === 'string' ? query.from : undefined,
     to: typeof query.to === 'string' ? query.to : undefined,
     artist: typeof query.artist === 'string' ? query.artist : undefined,
-    limit: typeof query.limit === 'string' ? parseInt(query.limit, 10) : undefined,
+    limit: typeof query.limit === 'string' ? Math.min(parseInt(query.limit, 10), 150) : undefined,
     sort: query.sort === 'count' ? 'count' : query.sort === 'hours' ? 'hours' : undefined,
   };
 }

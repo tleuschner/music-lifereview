@@ -13,6 +13,13 @@
       </div>
     </div>
 
+    <details class="intent-hint">
+      <summary>How is this measured?</summary>
+      <p><strong>Deliberate</strong> — you actively chose the song: clicked on it in a list, pressed play directly, or hit back to replay it.</p>
+      <p><strong>Served</strong> — Spotify picked what came next: the previous track ended and it autoplayed, or you pressed skip and Spotify served whatever was queued.</p>
+      <p>Plays with no recorded start reason aren't counted in either bucket, so deliberate + served may not equal total plays.</p>
+    </details>
+
     <div v-if="!hasData" class="empty-state">
       <p>Not enough data. Play at least 5 times per track to see intent breakdown.</p>
     </div>
@@ -221,6 +228,37 @@ onUnmounted(destroyChart);
 .chart-wrapper {
   position: relative;
   height: 1200px;
+}
+
+.intent-hint {
+  margin: 0 0 1rem;
+  font-size: 0.78rem;
+  color: #666;
+}
+
+.intent-hint summary {
+  cursor: pointer;
+  color: #555;
+  user-select: none;
+  list-style: none;
+}
+
+.intent-hint summary::before {
+  content: '▸ ';
+}
+
+.intent-hint[open] summary::before {
+  content: '▾ ';
+}
+
+.intent-hint p {
+  margin: 0.4rem 0 0 1rem;
+  line-height: 1.5;
+  color: #666;
+}
+
+.intent-hint strong {
+  color: #888;
 }
 
 .empty-state {

@@ -68,57 +68,73 @@
 
         <!-- Session Depth -->
         <div id="toc-session-depth">
-          <ChartWrapper :loading="loadingStates.sessionStamina" :error="errorStates.sessionStamina">
-            <SessionStaminaChart :data="sessionStamina" />
-          </ChartWrapper>
+          <LazySection>
+            <ChartWrapper :loading="loadingStates.sessionStamina" :error="errorStates.sessionStamina">
+              <SessionStaminaChart :data="sessionStamina" />
+            </ChartWrapper>
+          </LazySection>
         </div>
 
         <!-- Weekday / Weekend -->
         <div id="toc-weekday-weekend">
-          <ChartWrapper :loading="loadingStates.weekdayWeekend" :error="errorStates.weekdayWeekend">
-            <WeekdayWeekendChart :data="weekdayWeekend" />
-          </ChartWrapper>
+          <LazySection>
+            <ChartWrapper :loading="loadingStates.weekdayWeekend" :error="errorStates.weekdayWeekend">
+              <WeekdayWeekendChart :data="weekdayWeekend" />
+            </ChartWrapper>
+          </LazySection>
         </div>
 
         <!-- Marathons -->
         <div id="toc-marathons">
-          <ChartWrapper :loading="loadingStates.marathons" :error="errorStates.marathons">
-            <MarathonChart :data="marathons" />
-          </ChartWrapper>
+          <LazySection>
+            <ChartWrapper :loading="loadingStates.marathons" :error="errorStates.marathons">
+              <MarathonChart :data="marathons" />
+            </ChartWrapper>
+          </LazySection>
         </div>
 
         <!-- Artist Trends -->
         <div id="toc-artist-trends">
-          <ChartWrapper :loading="loadingStates.artistTimeline" :error="errorStates.artistTimeline">
-            <StackedArtistAreaChart :data="artistTimeline" />
-          </ChartWrapper>
+          <LazySection>
+            <ChartWrapper :loading="loadingStates.artistTimeline" :error="errorStates.artistTimeline">
+              <StackedArtistAreaChart :data="artistTimeline" />
+            </ChartWrapper>
+          </LazySection>
         </div>
 
         <!-- Track Trends -->
         <div id="toc-track-trends">
-          <ChartWrapper :loading="loadingStates.trackTimeline" :error="errorStates.trackTimeline">
-            <StackedTrackAreaChart :data="trackTimeline" />
-          </ChartWrapper>
+          <LazySection>
+            <ChartWrapper :loading="loadingStates.trackTimeline" :error="errorStates.trackTimeline">
+              <StackedTrackAreaChart :data="trackTimeline" />
+            </ChartWrapper>
+          </LazySection>
         </div>
 
         <!-- Discovery Rate -->
         <div id="toc-discovery-rate">
-          <ChartWrapper :loading="loadingStates.discoveryRate" :error="errorStates.discoveryRate">
-            <DiscoveryVsRepetitionChart :data="discoveryRate" />
-          </ChartWrapper>
+          <LazySection>
+            <ChartWrapper :loading="loadingStates.discoveryRate" :error="errorStates.discoveryRate">
+              <DiscoveryVsRepetitionChart :data="discoveryRate" />
+            </ChartWrapper>
+          </LazySection>
         </div>
 
         <!-- Race Charts -->
         <div id="toc-race-charts" class="toc-section">
           <div id="chart-artist-race">
-            <ChartWrapper :loading="loadingStates.artistCumulative" :error="errorStates.artistCumulative">
-              <ArtistRaceChart :data="artistCumulative" />
-            </ChartWrapper>
+            <LazySection>
+              <ChartWrapper :loading="loadingStates.artistCumulative" :error="errorStates.artistCumulative">
+                <ArtistRaceChart :data="artistCumulative" />
+              </ChartWrapper>
+            </LazySection>
           </div>
           <div id="chart-track-race">
-            <ChartWrapper :loading="loadingStates.trackCumulative" :error="errorStates.trackCumulative">
-              <TrackRaceChart :data="trackCumulative" />
-            </ChartWrapper>
+            <LazySection>
+              <ChartWrapper :loading="loadingStates.trackCumulative" :error="errorStates.trackCumulative">
+                <TrackRaceChart :data="trackCumulative" />
+              </ChartWrapper>
+            </LazySection>
           </div>
           <div ref="bmcSentinel" class="bmc-sentinel"></div>
           <BuyMeACoffeePopup ref="bmcPopup" />
@@ -126,98 +142,128 @@
 
         <!-- Artist Loyalty -->
         <div id="toc-loyalty">
-          <ChartWrapper :loading="loadingStates.artistLoyalty" :error="errorStates.artistLoyalty">
-            <ArtistLoyaltyChart :data="artistLoyalty" />
-          </ChartWrapper>
+          <LazySection>
+            <ChartWrapper :loading="loadingStates.artistLoyalty" :error="errorStates.artistLoyalty">
+              <ArtistLoyaltyChart :data="artistLoyalty" />
+            </ChartWrapper>
+          </LazySection>
         </div>
 
         <!-- Skip & Replay -->
         <div id="toc-skip-replay" class="toc-section">
           <div id="chart-replay">
-            <ChartWrapper :loading="loadingStates.backButtonTracks" :error="errorStates.backButtonTracks">
-              <ReplayLeaderboard :data="backButtonTracks" />
-            </ChartWrapper>
+            <LazySection>
+              <ChartWrapper :loading="loadingStates.backButtonTracks" :error="errorStates.backButtonTracks">
+                <ReplayLeaderboard :data="backButtonTracks" />
+              </ChartWrapper>
+            </LazySection>
           </div>
           <div id="chart-skip-graveyard">
-            <ChartWrapper :loading="loadingStates.skipGraveyard" :error="errorStates.skipGraveyard">
-              <SkipGraveyardChart :data="skipGraveyard" />
-            </ChartWrapper>
+            <LazySection>
+              <ChartWrapper :loading="loadingStates.skipGraveyard" :error="errorStates.skipGraveyard">
+                <SkipGraveyardChart :data="skipGraveyard" />
+              </ChartWrapper>
+            </LazySection>
           </div>
           <div id="chart-skipped-tracks">
-            <ChartWrapper :loading="loadingStates.skippedTracks" :error="errorStates.skippedTracks">
-              <SkippedTracksLeaderboard :data="skippedTracks" />
-            </ChartWrapper>
+            <LazySection>
+              <ChartWrapper :loading="loadingStates.skippedTracks" :error="errorStates.skippedTracks">
+                <SkippedTracksLeaderboard :data="skippedTracks" />
+              </ChartWrapper>
+            </LazySection>
           </div>
         </div>
 
         <!-- Obsessions -->
         <div id="toc-obsessions" class="toc-section">
-          <ChartWrapper :loading="loadingStates.obsessionTimeline" :error="errorStates.obsessionTimeline">
-            <ObsessionTimelineChart :data="obsessionTimeline" />
-          </ChartWrapper>
-          <ChartWrapper :loading="loadingStates.trackObsessionTimeline" :error="errorStates.trackObsessionTimeline">
-            <TrackObsessionChart :data="trackObsessionTimeline" />
-          </ChartWrapper>
+          <LazySection>
+            <ChartWrapper :loading="loadingStates.obsessionTimeline" :error="errorStates.obsessionTimeline">
+              <ObsessionTimelineChart :data="obsessionTimeline" />
+            </ChartWrapper>
+          </LazySection>
+          <LazySection>
+            <ChartWrapper :loading="loadingStates.trackObsessionTimeline" :error="errorStates.trackObsessionTimeline">
+              <TrackObsessionChart :data="trackObsessionTimeline" />
+            </ChartWrapper>
+          </LazySection>
         </div>
 
         <!-- Content Split -->
         <div id="toc-content-split">
-          <ChartWrapper :loading="loadingStates.contentSplit" :error="errorStates.contentSplit">
-            <PodcastMusicChart :data="contentSplit" />
-          </ChartWrapper>
+          <LazySection>
+            <ChartWrapper :loading="loadingStates.contentSplit" :error="errorStates.contentSplit">
+              <PodcastMusicChart :data="contentSplit" />
+            </ChartWrapper>
+          </LazySection>
         </div>
 
         <!-- Intent -->
         <div id="toc-intent" class="toc-section">
           <div id="chart-artist-intent">
-            <ChartWrapper :loading="loadingStates.artistIntent" :error="errorStates.artistIntent">
-              <ArtistIntentChart :data="artistIntent" />
-            </ChartWrapper>
+            <LazySection min-height="600px">
+              <ChartWrapper :loading="loadingStates.artistIntent" :error="errorStates.artistIntent">
+                <ArtistIntentChart :data="artistIntent" />
+              </ChartWrapper>
+            </LazySection>
           </div>
           <div id="chart-track-intent">
-            <ChartWrapper :loading="loadingStates.trackIntent" :error="errorStates.trackIntent">
-              <TrackIntentChart :data="trackIntent" />
-            </ChartWrapper>
+            <LazySection min-height="600px">
+              <ChartWrapper :loading="loadingStates.trackIntent" :error="errorStates.trackIntent">
+                <TrackIntentChart :data="trackIntent" />
+              </ChartWrapper>
+            </LazySection>
           </div>
         </div>
 
         <!-- Track Behavior -->
         <div id="toc-track-behavior" class="toc-section">
           <div id="chart-album-listeners">
-            <ChartWrapper :loading="loadingStates.albumListeners" :error="errorStates.albumListeners">
-              <AlbumListenerChart :data="albumListeners" />
-            </ChartWrapper>
+            <LazySection>
+              <ChartWrapper :loading="loadingStates.albumListeners" :error="errorStates.albumListeners">
+                <AlbumListenerChart :data="albumListeners" />
+              </ChartWrapper>
+            </LazySection>
           </div>
           <div id="chart-shuffle">
-            <ChartWrapper :loading="loadingStates.shuffleSerendipity" :error="errorStates.shuffleSerendipity">
-              <ShuffleSerendipityChart :data="shuffleSerendipity" />
-            </ChartWrapper>
+            <LazySection>
+              <ChartWrapper :loading="loadingStates.shuffleSerendipity" :error="errorStates.shuffleSerendipity">
+                <ShuffleSerendipityChart :data="shuffleSerendipity" />
+              </ChartWrapper>
+            </LazySection>
           </div>
           <div id="chart-intro-test">
-            <ChartWrapper :loading="loadingStates.introTestTracks" :error="errorStates.introTestTracks">
-              <IntroTestChart :data="introTestTracks" />
-            </ChartWrapper>
+            <LazySection>
+              <ChartWrapper :loading="loadingStates.introTestTracks" :error="errorStates.introTestTracks">
+                <IntroTestChart :data="introTestTracks" />
+              </ChartWrapper>
+            </LazySection>
           </div>
         </div>
 
         <!-- Discovery Map -->
         <div id="toc-discovery-map">
-          <ChartWrapper :loading="loadingStates.artistDiscovery" :error="errorStates.artistDiscovery">
-            <DiscoveryAgeMapChart :data="artistDiscovery" />
-          </ChartWrapper>
+          <LazySection>
+            <ChartWrapper :loading="loadingStates.artistDiscovery" :error="errorStates.artistDiscovery">
+              <DiscoveryAgeMapChart :data="artistDiscovery" />
+            </ChartWrapper>
+          </LazySection>
         </div>
 
         <!-- Seasons -->
         <div id="toc-seasons" class="toc-section">
           <div id="chart-seasonal-loyalty">
-            <ChartWrapper :loading="loadingStates.seasonalArtists" :error="errorStates.seasonalArtists">
-              <SeasonalLoyaltyChart :data="seasonalArtists" />
-            </ChartWrapper>
+            <LazySection>
+              <ChartWrapper :loading="loadingStates.seasonalArtists" :error="errorStates.seasonalArtists">
+                <SeasonalLoyaltyChart :data="seasonalArtists" />
+              </ChartWrapper>
+            </LazySection>
           </div>
           <div id="chart-rebound">
-            <ChartWrapper :loading="loadingStates.reboundArtists" :error="errorStates.reboundArtists">
-              <ReboundArtistsChart :data="reboundArtists" />
-            </ChartWrapper>
+            <LazySection>
+              <ChartWrapper :loading="loadingStates.reboundArtists" :error="errorStates.reboundArtists">
+                <ReboundArtistsChart :data="reboundArtists" />
+              </ChartWrapper>
+            </LazySection>
           </div>
         </div>
 
@@ -250,6 +296,7 @@ import { useStreamingData } from '../composables/useStreamingData';
 import { useFilters } from '../composables/useFilters';
 import LoadingSpinner from '../components/shared/LoadingSpinner.vue';
 import ChartWrapper from '../components/shared/ChartWrapper.vue';
+import LazySection from '../components/shared/LazySection.vue';
 import StatCard from '../components/shared/StatCard.vue';
 import ShareLinkCard from '../components/shared/ShareLinkCard.vue';
 import FilterBar from '../components/filters/FilterBar.vue';

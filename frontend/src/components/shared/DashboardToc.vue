@@ -74,6 +74,7 @@ function jumpTo(id: string) {
   if (!el) return;
   const top = el.getBoundingClientRect().top + window.scrollY - 80;
   window.scrollTo({ top, behavior: 'smooth' });
+  history.replaceState(null, '', `#${id}`);
 }
 </script>
 

@@ -17,6 +17,8 @@ interface SessionRow {
   is_active: boolean;
 }
 
+const PROTECTED_TOKENS = new Set(['1TE16M3fNOodsvJJUiiALA']);
+
 export class PostgresUploadSessionRepository implements UploadSessionRepository {
   constructor(private readonly db: Knex) {}
 
@@ -85,6 +87,7 @@ export class PostgresUploadSessionRepository implements UploadSessionRepository 
   }
 
   async deleteByToken(token: string): Promise<boolean> {
+    if (PROTECTED_TOKENS.has(token)) return false;
     const deleted = await this.db('upload_sessions')
       .where('share_token', token)
       .del();
@@ -98,6 +101,7 @@ export class PostgresUploadSessionRepository implements UploadSessionRepository 
       // marathon_sessions has no FK cascade — delete first
       const expiring = await trx<{ id: string }>('upload_sessions')
         .where('created_at', '<', cutoff)
+        .whereNotIn('share_token', [...PROTECTED_TOKENS])
         .select('id');
 
       if (expiring.length > 0) {
@@ -107,6 +111,7 @@ export class PostgresUploadSessionRepository implements UploadSessionRepository 
 
       const count = await trx('upload_sessions')
         .where('created_at', '<', cutoff)
+        .whereNotIn('share_token', [...PROTECTED_TOKENS])
         .del();
 
       return count;

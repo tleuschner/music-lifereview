@@ -46,7 +46,7 @@ export function useLocalPreview() {
         }
 
         for (const raw of entries) {
-          const e = raw as SpotifyStreamEntry;
+          const e = raw as unknown as SpotifyStreamEntry;
           if (e.ts) {
             if (!earliestTs || e.ts < earliestTs) earliestTs = e.ts;
             if (e.ts > latestTs) latestTs = e.ts;

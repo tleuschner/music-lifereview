@@ -3,11 +3,11 @@
     <div class="filter-row">
       <div class="filter-group">
         <label class="filter-label">From</label>
-        <input type="month" :value="dateFrom" class="filter-input" @input="$emit('update:dateFrom', ($event.target as HTMLInputElement).value || null)" />
+        <input type="month" :value="dateFrom" :min="minMonth" :max="maxMonth" class="filter-input" @input="$emit('update:dateFrom', ($event.target as HTMLInputElement).value || null)" />
       </div>
       <div class="filter-group">
         <label class="filter-label">To</label>
-        <input type="month" :value="dateTo" class="filter-input" @input="$emit('update:dateTo', ($event.target as HTMLInputElement).value || null)" />
+        <input type="month" :value="dateTo" :min="minMonth" :max="maxMonth" class="filter-input" @input="$emit('update:dateTo', ($event.target as HTMLInputElement).value || null)" />
       </div>
       <div class="filter-group">
         <label class="filter-label">Sort by</label>
@@ -37,6 +37,8 @@
 defineProps<{
   dateFrom: string | null;
   dateTo: string | null;
+  minMonth?: string;
+  maxMonth?: string;
   sortBy: 'hours' | 'count';
   limit: number;
   hasActiveFilters: boolean;

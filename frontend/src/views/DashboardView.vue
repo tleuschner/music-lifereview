@@ -44,6 +44,8 @@
             <FilterBar
               :date-from="dateFrom"
               :date-to="dateTo"
+              :min-month="overview.dateFrom.slice(0, 7)"
+              :max-month="overview.dateTo.slice(0, 7)"
               :sort-by="sortBy"
               :limit="limit"
               :has-active-filters="hasActiveFilters"

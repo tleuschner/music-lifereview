@@ -16,6 +16,7 @@ import type {
   BackButtonTrackEntry,
   ContentSplitPoint,
   ObsessionPhasePoint,
+  TrackObsessionPoint,
   SessionStaminaResponse,
   ArtistIntentEntry,
   TrackIntentEntry,
@@ -198,6 +199,11 @@ export async function getContentSplit(token: string, filters: StatsFilter = {}):
 
 export async function getObsessionTimeline(token: string, filters: StatsFilter = {}): Promise<ObsessionPhasePoint[]> {
   const { data } = await http.get(`/stats/${token}/obsession-timeline`, { params: filterParams(filters) });
+  return data;
+}
+
+export async function getTrackObsessionTimeline(token: string, filters: StatsFilter = {}): Promise<TrackObsessionPoint[]> {
+  const { data } = await http.get(`/stats/${token}/track-obsession-timeline`, { params: filterParams(filters) });
   return data;
 }
 

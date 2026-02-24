@@ -11,9 +11,11 @@ import { UploadStreamingHistoryUseCase } from "./application/UploadStreamingHist
 import { QueryPersonalStatsUseCase } from "./application/QueryPersonalStatsUseCase.js";
 import { QueryCommunityStatsUseCase } from "./application/QueryCommunityStatsUseCase.js";
 import { DeleteUploadSessionUseCase } from "./application/DeleteUploadSessionUseCase.js";
+import { GenerateOgPreviewUseCase } from "./application/GenerateOgPreviewUseCase.js";
 import { createUploadController } from "./adapter/inbound/http/UploadController.js";
 import { createPersonalStatsController } from "./adapter/inbound/http/PersonalStatsController.js";
 import { createCommunityStatsController } from "./adapter/inbound/http/CommunityStatsController.js";
+import { createShareController } from "./adapter/inbound/http/ShareController.js";
 import { errorHandler } from "./adapter/inbound/http/middleware/errorHandler.js";
 
 const config = loadConfig();
@@ -37,6 +39,7 @@ const personalStatsUseCase = new QueryPersonalStatsUseCase(
   entryRepo,
 );
 const deleteUploadSessionUseCase = new DeleteUploadSessionUseCase(sessionRepo);
+const ogPreviewUseCase = new GenerateOgPreviewUseCase(sessionRepo, entryRepo);
 const communityStatsUseCase = new QueryCommunityStatsUseCase(
   statsStore,
   sessionRepo,
@@ -68,6 +71,14 @@ const communityLimiter = rateLimit({
   message: { error: 'Too many requests, please slow down.' },
 });
 
+const shareLimiter = rateLimit({
+  windowMs: 60 * 1000, // 1 minute
+  max: 60,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many requests, please slow down.' },
+});
+
 // Express app
 const app = express();
 app.set('trust proxy', 1); // trust Caddy's X-Forwarded-For
@@ -88,6 +99,7 @@ app.use(
   communityLimiter,
   createCommunityStatsController(communityStatsUseCase),
 );
+app.use("/share", shareLimiter, createShareController(ogPreviewUseCase));
 
 // Error handling
 app.use(errorHandler);

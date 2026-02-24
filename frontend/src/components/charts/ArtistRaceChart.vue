@@ -3,10 +3,15 @@
     <div class="chart-header">
       <div>
         <h3 class="section-title">All-Time Artist Race</h3>
-        <p class="section-subtitle">Cumulative listening hours — see exactly when each artist took over your life.</p>
+        <p class="section-subtitle">
+          Cumulative listening hours — see exactly when each artist took over
+          your life.
+        </p>
       </div>
       <div v-if="chartData && selectedArtists.length > 0" class="controls">
-        <span class="selection-count">{{ selectedArtists.length }} of {{ legendItems.length }} shown</span>
+        <span class="selection-count"
+          >{{ selectedArtists.length }} of {{ legendItems.length }} shown</span
+        >
         <button class="ctrl-btn" @click="showAll">Show All</button>
       </div>
     </div>
@@ -25,10 +30,18 @@
           :key="item.name"
           class="legend-item"
           :class="{
-            'legend-item--active': selectedArtists.length === 0 || selectedArtists.includes(item.name),
-            'legend-item--dim': selectedArtists.length > 0 && !selectedArtists.includes(item.name),
+            'legend-item--active':
+              selectedArtists.length === 0 ||
+              selectedArtists.includes(item.name),
+            'legend-item--dim':
+              selectedArtists.length > 0 &&
+              !selectedArtists.includes(item.name),
           }"
-          :style="selectedArtists.includes(item.name) ? { borderColor: item.color + '80' } : {}"
+          :style="
+            selectedArtists.includes(item.name)
+              ? { borderColor: item.color + '80' }
+              : {}
+          "
           @click="toggleArtist(item.name)"
         >
           <span class="legend-dot" :style="{ background: item.color }"></span>
@@ -40,8 +53,8 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue';
-import { Line } from 'vue-chartjs';
+import { computed, ref, watch } from "vue";
+import { Line } from "vue-chartjs";
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -50,14 +63,28 @@ import {
   LineElement,
   Tooltip,
   type ChartOptions,
-} from 'chart.js';
-import type { ArtistTimelineResponse } from '@music-livereview/shared';
+} from "chart.js";
+import type { ArtistTimelineResponse } from "@music-livereview/shared";
 
-ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Tooltip);
+ChartJS.register(
+  CategoryScale,
+  LinearScale,
+  PointElement,
+  LineElement,
+  Tooltip,
+);
 
 const COLORS = [
-  '#1db954', '#1ed760', '#2ecc71', '#3498db', '#9b59b6',
-  '#e74c3c', '#e67e22', '#f1c40f', '#00bcd4', '#ff5722',
+  "#1db954", // spotify green — keep as anchor
+  "#e74c3c", // red
+  "#3498db", // blue
+  "#f1c40f", // yellow
+  "#9b59b6", // purple
+  "#ff7043", // deep orange
+  "#00bcd4", // cyan
+  "#e91e63", // pink
+  "#43a047", // darker green (distinct from spotify green)
+  "#ff9800", // amber
 ];
 
 const props = defineProps<{ data: ArtistTimelineResponse | null }>();
@@ -74,7 +101,7 @@ const chartData = computed(() => {
       label: artist.name,
       data: artist.values,
       borderColor: COLORS[i % COLORS.length],
-      backgroundColor: 'transparent',
+      backgroundColor: "transparent",
       fill: false,
       tension: 0.3,
       pointRadius: 0,
@@ -92,34 +119,35 @@ const legendItems = computed(() => {
   }));
 });
 
-const chartOptions: ChartOptions<'line'> = {
+const chartOptions: ChartOptions<"line"> = {
   responsive: true,
   maintainAspectRatio: false,
-  interaction: { mode: 'index', intersect: false },
+  interaction: { mode: "index", intersect: false },
   plugins: {
     legend: { display: false },
     tooltip: {
       callbacks: {
-        label: (ctx) => ` ${ctx.dataset.label}: ${ctx.parsed?.y?.toLocaleString(undefined, { maximumFractionDigits: 1 })}h total`,
+        label: (ctx) =>
+          ` ${ctx.dataset.label}: ${ctx.parsed?.y?.toLocaleString(undefined, { maximumFractionDigits: 1 })}h total`,
       },
     },
   },
   scales: {
     x: {
-      grid: { color: '#2a2a2a' },
-      ticks: { color: '#888', maxRotation: 45 },
+      grid: { color: "#2a2a2a" },
+      ticks: { color: "#888", maxRotation: 45 },
     },
     y: {
-      grid: { color: '#2a2a2a' },
+      grid: { color: "#2a2a2a" },
       ticks: {
-        color: '#888',
+        color: "#888",
         callback: (v) => `${v}h`,
       },
     },
   },
 };
 
-function getChart(): ChartJS<'line'> | null {
+function getChart(): ChartJS<"line"> | null {
   return (chartRef.value as any)?.chart ?? null;
 }
 
@@ -128,15 +156,16 @@ function applyVisibility() {
   if (!chart) return;
   const sel = selectedArtists.value;
   chart.data.datasets.forEach((ds, i) => {
-    chart.getDatasetMeta(i).hidden = sel.length > 0 && !sel.includes(ds.label ?? '');
+    chart.getDatasetMeta(i).hidden =
+      sel.length > 0 && !sel.includes(ds.label ?? "");
   });
-  chart.update('none');
+  chart.update("none");
 }
 
 function toggleArtist(name: string) {
   const current = selectedArtists.value;
   if (current.includes(name)) {
-    selectedArtists.value = current.filter(n => n !== name);
+    selectedArtists.value = current.filter((n) => n !== name);
   } else {
     selectedArtists.value = [...current, name];
   }
@@ -150,13 +179,16 @@ function showAll() {
   chart.data.datasets.forEach((_, i) => {
     chart.getDatasetMeta(i).hidden = false;
   });
-  chart.update('none');
+  chart.update("none");
 }
 
 // Reset selection when new data arrives (chart rebuilds, hidden states reset)
-watch(() => props.data, () => {
-  selectedArtists.value = [];
-});
+watch(
+  () => props.data,
+  () => {
+    selectedArtists.value = [];
+  },
+);
 </script>
 
 <style scoped>
@@ -196,9 +228,14 @@ watch(() => props.data, () => {
   border: 1px solid #333;
   border-radius: 4px;
   cursor: pointer;
-  transition: color 0.15s, border-color 0.15s;
+  transition:
+    color 0.15s,
+    border-color 0.15s;
 }
-.ctrl-btn:hover { color: #e0e0e0; border-color: #555; }
+.ctrl-btn:hover {
+  color: #e0e0e0;
+  border-color: #555;
+}
 
 .empty-state {
   padding: 2rem 0;
@@ -226,14 +263,18 @@ watch(() => props.data, () => {
   padding: 3px 9px;
   font-size: 0.78rem;
   color: #ccc;
-  background: rgba(255,255,255,0.04);
+  background: rgba(255, 255, 255, 0.04);
   border: 1px solid #333;
   border-radius: 20px;
   cursor: pointer;
-  transition: opacity 0.2s, border-color 0.15s, background 0.15s, color 0.15s;
+  transition:
+    opacity 0.2s,
+    border-color 0.15s,
+    background 0.15s,
+    color 0.15s;
 }
 .legend-item:hover {
-  background: rgba(255,255,255,0.09);
+  background: rgba(255, 255, 255, 0.09);
   color: #fff;
 }
 .legend-item--active {

@@ -2,14 +2,14 @@
   <div class="chart-container card">
     <div class="chart-header">
       <div>
-        <h2 class="chart-title">Obsession Timeline</h2>
-        <p class="chart-subtitle">Months where a single artist consumed &gt;40% of your listening hours</p>
+        <h2 class="chart-title">Song Obsession Peaks</h2>
+        <p class="chart-subtitle">Your 20 most song-dominated months — ranked by how much one track owned your listening</p>
       </div>
-      <span v-if="hasData" class="phase-count">{{ phaseCount }} obsession {{ phaseCount === 1 ? 'month' : 'months' }}</span>
+      <span v-if="hasData" class="phase-count">{{ phaseCount }} {{ phaseCount === 1 ? 'month' : 'months' }}</span>
     </div>
 
     <div v-if="!hasData" class="empty-state">
-      <p>No obsession phases found — you're a well-rounded listener!</p>
+      <p>No data yet — upload your Spotify history to see your song obsession peaks.</p>
     </div>
 
     <div v-else>
@@ -36,24 +36,25 @@
             />
 
             <!-- One column per obsession month -->
-            <div v-for="d in props.data" :key="d.period" class="bar-col">
-              <!-- bar-wrap anchors the tooltip without overflow:hidden -->
+            <div v-for="d in props.data" :key="d.period + d.trackName" class="bar-col">
               <div class="bar-wrap" :style="{ height: barHeightPx(d) + 'px' }">
                 <div class="bar-outer">
                   <!-- Grey top = remaining listening time -->
                   <div class="bar-rest" :style="{ flex: restFlex(d) }" />
-                  <!-- Colorful bottom = artist time -->
+                  <!-- Colorful bottom = track time -->
                   <div
-                    class="bar-artist"
+                    class="bar-track"
                     :style="{ flex: d.percentage, background: colorFor(d) }"
                   >
-                    <span v-if="artistPx(d) >= 24" class="bar-pct">{{ d.percentage }}%</span>
+                    <span v-if="trackPx(d) >= 24" class="bar-pct">{{ d.percentage }}%</span>
                   </div>
                 </div>
-                <!-- Tooltip overlays the bar on hover — no overflow clipping issue -->
+                <!-- Tooltip -->
                 <div class="bar-tooltip">
-                  <div class="tt-name">{{ d.artistName }}</div>
-                  <div class="tt-val">{{ d.artistHours }}h <span class="tt-dim">/ {{ d.totalHours }}h total</span></div>
+                  <div class="tt-track">{{ d.trackName }}</div>
+                  <div class="tt-artist">{{ d.artistName }}</div>
+                  <div class="tt-val">{{ d.trackHours }}h <span class="tt-dim">/ {{ d.totalHours }}h total</span></div>
+                  <div class="tt-period">{{ formatPeriod(d.period) }}</div>
                 </div>
               </div>
               <div class="bar-month">{{ formatPeriod(d.period) }}</div>
@@ -67,9 +68,9 @@
           <span class="legend-dot legend-dot--rest" />
           Other listening
         </span>
-        <span v-for="(artist, i) in uniqueArtists" :key="artist" class="legend-item">
-          <span class="legend-dot" :style="{ background: artistColor(i) }" />
-          {{ artist }}
+        <span v-for="(track, i) in uniqueTracks" :key="track" class="legend-item">
+          <span class="legend-dot" :style="{ background: trackColor(i) }" />
+          {{ track }}
         </span>
       </div>
     </div>
@@ -78,9 +79,9 @@
 
 <script setup lang="ts">
 import { computed } from 'vue';
-import type { ObsessionPhasePoint } from '@music-livereview/shared';
+import type { TrackObsessionPoint } from '@music-livereview/shared';
 
-const props = defineProps<{ data: ObsessionPhasePoint[] }>();
+const props = defineProps<{ data: TrackObsessionPoint[] }>();
 
 const PALETTE = [
   '#1db954',
@@ -100,30 +101,30 @@ const CHART_HEIGHT = 340;
 const hasData = computed(() => props.data.length > 0);
 const phaseCount = computed(() => props.data.length);
 
-const uniqueArtists = computed(() => {
+const uniqueTracks = computed(() => {
   const seen = new Set<string>();
   const result: string[] = [];
   for (const d of props.data) {
-    if (!seen.has(d.artistName)) {
-      seen.add(d.artistName);
-      result.push(d.artistName);
+    if (!seen.has(d.trackName)) {
+      seen.add(d.trackName);
+      result.push(d.trackName);
     }
   }
   return result;
 });
 
-const artistIndexMap = computed(() => {
+const trackIndexMap = computed(() => {
   const map = new Map<string, number>();
-  uniqueArtists.value.forEach((name, i) => map.set(name, i));
+  uniqueTracks.value.forEach((name, i) => map.set(name, i));
   return map;
 });
 
-function artistColor(index: number): string {
+function trackColor(index: number): string {
   return PALETTE[index % PALETTE.length];
 }
 
-function colorFor(d: ObsessionPhasePoint): string {
-  return artistColor(artistIndexMap.value.get(d.artistName) ?? 0);
+function colorFor(d: TrackObsessionPoint): string {
+  return trackColor(trackIndexMap.value.get(d.trackName) ?? 0);
 }
 
 const yAxis = computed(() => {
@@ -139,15 +140,15 @@ const yAxis = computed(() => {
   return { ticks, niceMax };
 });
 
-function barHeightPx(d: ObsessionPhasePoint): number {
+function barHeightPx(d: TrackObsessionPoint): number {
   return Math.round((d.totalHours / yAxis.value.niceMax) * CHART_HEIGHT);
 }
 
-function restFlex(d: ObsessionPhasePoint): number {
+function restFlex(d: TrackObsessionPoint): number {
   return Math.max(0, 100 - d.percentage);
 }
 
-function artistPx(d: ObsessionPhasePoint): number {
+function trackPx(d: TrackObsessionPoint): number {
   return (d.totalHours / yAxis.value.niceMax) * CHART_HEIGHT * (d.percentage / 100);
 }
 
@@ -258,7 +259,6 @@ function formatPeriod(period: string): string {
   gap: 5px;
 }
 
-/* Wrapper anchors the tooltip; NO overflow:hidden so tooltip is never clipped */
 .bar-wrap {
   position: relative;
   width: 100%;
@@ -278,7 +278,7 @@ function formatPeriod(period: string): string {
   min-height: 0;
 }
 
-.bar-artist {
+.bar-track {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -303,7 +303,7 @@ function formatPeriod(period: string): string {
   background: rgba(8, 8, 8, 0.92);
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 6px;
-  padding: 5px 9px;
+  padding: 6px 10px;
   white-space: nowrap;
   font-size: 0.72rem;
   color: #ddd;
@@ -318,10 +318,25 @@ function formatPeriod(period: string): string {
   opacity: 1;
 }
 
-.tt-name {
+.tt-track {
   font-weight: 600;
   color: #fff;
   font-size: 0.73rem;
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tt-artist {
+  color: #aaa;
+  font-size: 0.68rem;
+  margin-bottom: 2px;
+}
+
+.tt-period {
+  color: #666;
+  font-size: 0.68rem;
+  margin-top: 2px;
 }
 
 .tt-dim {

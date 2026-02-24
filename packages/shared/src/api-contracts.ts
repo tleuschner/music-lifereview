@@ -165,6 +165,15 @@ export interface ObsessionPhasePoint {
   percentage: number;   // artistHours / totalHours × 100 (always >= 40)
 }
 
+export interface TrackObsessionPoint {
+  period: string;       // "YYYY-MM"
+  trackName: string;    // the dominant track that month
+  artistName: string;   // artist of that track
+  trackHours: number;   // hours listened to that track
+  totalHours: number;   // total music listening hours that month
+  percentage: number;   // trackHours / totalHours × 100
+}
+
 export interface SessionStaminaResponse {
   /** 7 rows (Mon–Sun) × 24 cols (0–23h), each cell = average chain length */
   data: number[][];
@@ -321,4 +330,25 @@ export interface TrendingArtistEntry {
   name: string;
   uploadCount: number;
   totalPlays: number;
+}
+
+// ─── OG Preview ────────────────────────────────────────
+
+export interface OgPreviewData {
+  /** Headline fact, e.g. "Listened to 2,847 hours of music" */
+  headline: string;
+  /** Supporting detail, e.g. "That's 118 days straight" */
+  subline: string;
+  /** The user's #1 artist name */
+  topArtist: string | null;
+  /** The user's most-played track name */
+  topTrack: string | null;
+  /** How many times the top track was played */
+  topTrackPlays: number | null;
+  totalHours: number;
+  uniqueArtists: number;
+  /** e.g. "Jan 2019 – Dec 2024" */
+  dateRange: string;
+  /** Listening activity over time, normalized 0–1 (one value per bar) */
+  timelineValues: number[];
 }

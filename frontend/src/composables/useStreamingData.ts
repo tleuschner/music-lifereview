@@ -15,6 +15,7 @@ import type {
   BackButtonTrackEntry,
   ContentSplitPoint,
   ObsessionPhasePoint,
+  TrackObsessionPoint,
   SessionStaminaResponse,
   ArtistIntentEntry,
   TrackIntentEntry,
@@ -47,6 +48,7 @@ export function useStreamingData(token: Ref<string>, filters: Ref<StatsFilter>) 
   const trackCumulative = ref<TrackTimelineResponse | null>(null);
   const contentSplit = ref<ContentSplitPoint[]>([]);
   const obsessionTimeline = ref<ObsessionPhasePoint[]>([]);
+  const trackObsessionTimeline = ref<TrackObsessionPoint[]>([]);
   const sessionStamina = ref<SessionStaminaResponse | null>(null);
   const artistIntent = ref<ArtistIntentEntry[]>([]);
   const trackIntent = ref<TrackIntentEntry[]>([]);
@@ -77,6 +79,7 @@ export function useStreamingData(token: Ref<string>, filters: Ref<StatsFilter>) 
     trackCumulative: false,
     contentSplit: false,
     obsessionTimeline: false,
+    trackObsessionTimeline: false,
     sessionStamina: false,
     artistIntent: false,
     trackIntent: false,
@@ -108,6 +111,7 @@ export function useStreamingData(token: Ref<string>, filters: Ref<StatsFilter>) 
     trackCumulative: false,
     contentSplit: false,
     obsessionTimeline: false,
+    trackObsessionTimeline: false,
     sessionStamina: false,
     artistIntent: false,
     trackIntent: false,
@@ -161,6 +165,7 @@ export function useStreamingData(token: Ref<string>, filters: Ref<StatsFilter>) 
       () => fetchOne('trackCumulative', trackCumulative, () => api.getTrackCumulative(token.value, f)),
       () => fetchOne('contentSplit', contentSplit, () => api.getContentSplit(token.value, f)),
       () => fetchOne('obsessionTimeline', obsessionTimeline, () => api.getObsessionTimeline(token.value, f)),
+      () => fetchOne('trackObsessionTimeline', trackObsessionTimeline, () => api.getTrackObsessionTimeline(token.value, f)),
       () => fetchOne('sessionStamina', sessionStamina, () => api.getSessionStamina(token.value, f)),
       () => fetchOne('artistIntent', artistIntent, () => api.getArtistIntent(token.value, f)),
       () => fetchOne('trackIntent', trackIntent, () => api.getTrackIntent(token.value, f)),
@@ -210,6 +215,7 @@ export function useStreamingData(token: Ref<string>, filters: Ref<StatsFilter>) 
     trackCumulative,
     contentSplit,
     obsessionTimeline,
+    trackObsessionTimeline,
     sessionStamina,
     artistIntent,
     trackIntent,

@@ -47,6 +47,7 @@ export function createPersonalStatsController(useCase: QueryPersonalStats, delet
   router.get('/:token/track-cumulative', handle((t, f) => useCase.getTrackCumulative(t, f.limit ?? DEFAULT_ARTIST_TIMELINE_LIMIT, f)));
   router.get('/:token/content-split', handle((t, f) => useCase.getContentSplit(t, f)));
   router.get('/:token/obsession-timeline', handle((t, f) => useCase.getObsessionTimeline(t, f)));
+  router.get('/:token/track-obsession-timeline', handle((t, f) => useCase.getTrackObsessionTimeline(t, f)));
   router.get('/:token/session-stamina', handle((t, f) => useCase.getSessionStamina(t, f)));
   router.get('/:token/artist-intent', handle((t, f) => useCase.getArtistIntent(t, f)));
   router.get('/:token/track-intent', handle((t, f) => useCase.getTrackIntent(t, f, f.limit ?? DEFAULT_TOP_LIMIT)));

@@ -15,6 +15,7 @@ import type {
   BackButtonRow,
   ContentSplitRow,
   ObsessionPhaseRow,
+  TrackObsessionRow,
   StaminaRow,
   ArtistIntentRow,
   TrackIntentRow,
@@ -710,6 +711,65 @@ export class PostgresStreamEntryRepository implements StreamEntryRepository {
       period: r.period,
       artistName: r.artist_name,
       artistMs: Number(r.artist_ms),
+      totalMs: Number(r.total_ms),
+      percentage: Number(r.percentage),
+    }));
+  }
+
+  async getTrackObsessionTimeline(sessionId: string, filters: StatsFilter): Promise<TrackObsessionRow[]> {
+    const sql = `
+      WITH monthly_top AS (
+        SELECT
+          t.month,
+          t.track_id,
+          tc.track_name,
+          tc.artist_name,
+          SUM(t.ms_played) AS track_ms,
+          ROW_NUMBER() OVER (PARTITION BY t.month ORDER BY SUM(t.ms_played) DESC) AS rn
+        FROM monthly_track_stats t
+        JOIN track_catalog tc ON t.track_id = tc.id
+        WHERE t.session_id = ?
+          ${filters.from ? "AND t.month >= date_trunc('month', ?::date)" : ''}
+          ${filters.to   ? "AND t.month <= date_trunc('month', ?::date)" : ''}
+        GROUP BY t.month, t.track_id, tc.track_name, tc.artist_name
+      ),
+      monthly_totals AS (
+        SELECT
+          month,
+          SUM(ms_played) AS total_ms
+        FROM monthly_track_stats
+        WHERE session_id = ?
+          ${filters.from ? "AND month >= date_trunc('month', ?::date)" : ''}
+          ${filters.to   ? "AND month <= date_trunc('month', ?::date)" : ''}
+        GROUP BY month
+      )
+      SELECT
+        to_char(t.month, 'YYYY-MM')                                         AS period,
+        t.track_name,
+        t.artist_name,
+        t.track_ms::bigint,
+        m.total_ms::bigint,
+        ROUND(t.track_ms * 100.0 / NULLIF(m.total_ms, 0), 1)              AS percentage
+      FROM monthly_top t
+      JOIN monthly_totals m ON t.month = m.month
+      WHERE t.rn = 1
+      ORDER BY percentage DESC
+      LIMIT 20
+    `;
+
+    const bindings: unknown[] = [sessionId];
+    if (filters.from) bindings.push(filters.from);
+    if (filters.to) bindings.push(filters.to);
+    bindings.push(sessionId);
+    if (filters.from) bindings.push(filters.from);
+    if (filters.to) bindings.push(filters.to);
+
+    const result = await this.db.raw(sql, bindings);
+    return result.rows.map((r: { period: string; track_name: string; artist_name: string; track_ms: string; total_ms: string; percentage: string }) => ({
+      period: r.period,
+      trackName: r.track_name,
+      artistName: r.artist_name,
+      trackMs: Number(r.track_ms),
       totalMs: Number(r.total_ms),
       percentage: Number(r.percentage),
     }));

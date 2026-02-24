@@ -13,6 +13,7 @@ import type {
   BackButtonTrackEntry,
   ContentSplitPoint,
   ObsessionPhasePoint,
+  TrackObsessionPoint,
   SessionStaminaResponse,
   ArtistIntentEntry,
   TrackIntentEntry,
@@ -44,6 +45,7 @@ export interface QueryPersonalStats {
   getTrackCumulative(token: string, limit: number, filters: StatsFilter): Promise<TrackTimelineResponse | null>;
   getContentSplit(token: string, filters: StatsFilter): Promise<ContentSplitPoint[] | null>;
   getObsessionTimeline(token: string, filters: StatsFilter): Promise<ObsessionPhasePoint[] | null>;
+  getTrackObsessionTimeline(token: string, filters: StatsFilter): Promise<TrackObsessionPoint[] | null>;
   getSessionStamina(token: string, filters: StatsFilter): Promise<SessionStaminaResponse | null>;
   getArtistIntent(token: string, filters: StatsFilter): Promise<ArtistIntentEntry[] | null>;
   getTrackIntent(token: string, filters: StatsFilter, limit: number): Promise<TrackIntentEntry[] | null>;

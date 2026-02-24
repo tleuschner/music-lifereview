@@ -221,6 +221,15 @@ export interface ObsessionPhaseRow {
   percentage: number;
 }
 
+export interface TrackObsessionRow {
+  period: string;
+  trackName: string;
+  artistName: string;
+  trackMs: number;
+  totalMs: number;
+  percentage: number;
+}
+
 export interface ArtistIntentRow {
   artistName: string;
   totalPlays: number;
@@ -299,6 +308,7 @@ export interface StreamEntryRepository {
   getTrackCumulative(sessionId: string, limit: number, filters: StatsFilter): Promise<{ periods: string[]; tracks: Array<{ name: string; artistName: string; values: number[] }> }>;
   getContentSplit(sessionId: string, filters: StatsFilter): Promise<ContentSplitRow[]>;
   getObsessionTimeline(sessionId: string, filters: StatsFilter): Promise<ObsessionPhaseRow[]>;
+  getTrackObsessionTimeline(sessionId: string, filters: StatsFilter): Promise<TrackObsessionRow[]>;
   getSessionStamina(sessionId: string, filters: StatsFilter): Promise<StaminaRow[]>;
   getArtistIntent(sessionId: string, filters: StatsFilter): Promise<ArtistIntentRow[]>;
   getTrackIntent(sessionId: string, filters: StatsFilter, limit: number): Promise<TrackIntentRow[]>;

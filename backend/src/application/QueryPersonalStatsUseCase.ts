@@ -14,6 +14,7 @@ import type {
   BackButtonTrackEntry,
   ContentSplitPoint,
   ObsessionPhasePoint,
+  TrackObsessionPoint,
   SessionStaminaResponse,
   ArtistIntentEntry,
   TrackIntentEntry,
@@ -271,6 +272,21 @@ export class QueryPersonalStatsUseCase implements QueryPersonalStats {
       period: r.period,
       artistName: r.artistName,
       artistHours: Math.round(r.artistMs / MS_PER_HOUR * 10) / 10,
+      totalHours: Math.round(r.totalMs / MS_PER_HOUR * 10) / 10,
+      percentage: r.percentage,
+    }));
+  }
+
+  async getTrackObsessionTimeline(token: string, filters: StatsFilter): Promise<TrackObsessionPoint[] | null> {
+    const sessionId = await this.resolveSessionId(token);
+    if (!sessionId) return null;
+
+    const rows = await this.entryRepo.getTrackObsessionTimeline(sessionId, filters);
+    return rows.map(r => ({
+      period: r.period,
+      trackName: r.trackName,
+      artistName: r.artistName,
+      trackHours: Math.round(r.trackMs / MS_PER_HOUR * 10) / 10,
       totalHours: Math.round(r.totalMs / MS_PER_HOUR * 10) / 10,
       percentage: r.percentage,
     }));

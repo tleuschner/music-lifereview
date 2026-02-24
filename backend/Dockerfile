@@ -43,6 +43,10 @@ COPY --from=build /app/backend/dist ./backend/dist
 COPY backend/src/adapter/outbound/persistence/migrations \
      ./backend/dist/adapter/outbound/persistence/migrations
 
+# Font files for OG image generation (tsc doesn't copy non-TS assets)
+COPY backend/src/adapter/outbound/og/fonts \
+     ./backend/dist/adapter/outbound/og/fonts
+
 COPY backend/docker-entrypoint.sh /docker-entrypoint.sh
 RUN chmod +x /docker-entrypoint.sh
 

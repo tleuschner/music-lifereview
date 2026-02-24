@@ -3,6 +3,10 @@ music.timleuschner.de {
 		reverse_proxy backend:3000
 	}
 
+	handle /share/* {
+		reverse_proxy backend:3000
+	}
+
 	handle {
 		root * /srv/frontend
 		try_files {path} /index.html

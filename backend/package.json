@@ -10,13 +10,15 @@
   },
   "dependencies": {
     "@music-livereview/shared": "*",
+    "@resvg/resvg-js": "^2.6.2",
     "cors": "^2.8.5",
     "eslint": "10.0.1",
     "express": "^4.21.0",
     "express-rate-limit": "^8.2.1",
     "knex": "^3.1.0",
     "multer": "^1.4.5-lts.1",
-    "pg": "^8.13.0"
+    "pg": "^8.13.0",
+    "satori": "^0.19.2"
   },
   "devDependencies": {
     "@types/cors": "^2.8.17",

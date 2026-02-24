@@ -71,6 +71,9 @@ export function aggregateInWorker(
           : { stage: 'aggregating' });
       } else if (msg.type === 'done') {
         worker.terminate();
+        if (msg.skippedEntries > 0) {
+          console.warn(`[aggregation] Skipped ${msg.skippedEntries.toLocaleString()} invalid entries (missing or malformed ts/ms_played).`);
+        }
         resolve({ result: msg.result, userHash: msg.userHash });
       } else if (msg.type === 'error') {
         worker.terminate();

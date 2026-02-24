@@ -3,6 +3,9 @@ import JSZip from 'jszip';
 import { aggregateInWorker, postAggregated, getStatus } from '../services/api';
 import type { StatusResponse } from '@music-livereview/shared';
 
+const MAX_FILE_BYTES = 200 * 1024 * 1024;  // 200 MB per JSON file
+const MAX_TOTAL_BYTES = 800 * 1024 * 1024; // 800 MB across all files
+
 export type UploadState = 'idle' | 'validating' | 'reading' | 'aggregating' | 'uploading' | 'processing' | 'done' | 'error';
 
 export function useFileUpload() {
@@ -18,6 +21,9 @@ export function useFileUpload() {
     error.value = null;
     const extracted: File[] = [];
 
+    // Track total bytes including already-loaded files
+    let totalBytes = files.value.reduce((sum, f) => sum + f.size, 0);
+
     for (const file of newFiles) {
       if (file.name.endsWith('.zip')) {
         try {
@@ -31,13 +37,32 @@ export function useFileUpload() {
           }
           for (const entry of audioFiles) {
             const blob = await entry.async('blob');
-            extracted.push(new File([blob], entry.name.split('/').pop()!, { type: 'application/json' }));
+            const filename = entry.name.split('/').pop()!;
+            if (blob.size > MAX_FILE_BYTES) {
+              error.value = `${filename} is too large (${(blob.size / 1024 / 1024).toFixed(0)} MB). Max 200 MB per file.`;
+              return;
+            }
+            totalBytes += blob.size;
+            if (totalBytes > MAX_TOTAL_BYTES) {
+              error.value = 'Total data exceeds 800 MB. Upload a smaller export or fewer files.';
+              return;
+            }
+            extracted.push(new File([blob], filename, { type: 'application/json' }));
           }
         } catch {
           error.value = 'Failed to read zip file.';
           return;
         }
       } else if (file.name.endsWith('.json')) {
+        if (file.size > MAX_FILE_BYTES) {
+          error.value = `${file.name} is too large (${(file.size / 1024 / 1024).toFixed(0)} MB). Max 200 MB per file.`;
+          return;
+        }
+        totalBytes += file.size;
+        if (totalBytes > MAX_TOTAL_BYTES) {
+          error.value = 'Total data exceeds 800 MB. Upload a smaller export or fewer files.';
+          return;
+        }
         extracted.push(file);
       }
     }
@@ -46,7 +71,13 @@ export function useFileUpload() {
       error.value = 'Please upload your Spotify export zip or JSON files.';
       return;
     }
-    files.value = [...files.value, ...extracted];
+
+    // Skip files that are already loaded (e.g. user dropped the same zip twice)
+    const existingNames = new Set(files.value.map(f => f.name));
+    const unique = extracted.filter(f => !existingNames.has(f.name));
+    if (unique.length === 0) return; // all duplicates — silently ignore
+
+    files.value = [...files.value, ...unique];
   }
 
   function removeFile(index: number) {

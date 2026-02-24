@@ -1,13 +1,16 @@
 <template>
   <div v-if="preview" class="preview card">
-    <h3 class="section-title">Preview</h3>
+    <div class="preview-header">
+      <h3 class="section-title">Preview</h3>
+      <span class="preview-estimate-badge">estimates</span>
+    </div>
     <div class="preview-stats grid grid-4">
       <div class="preview-stat">
-        <span class="preview-stat-value">{{ preview.entryCount.toLocaleString() }}</span>
+        <span class="preview-stat-value">~{{ preview.entryCount.toLocaleString() }}</span>
         <span class="preview-stat-label">Entries</span>
       </div>
       <div class="preview-stat">
-        <span class="preview-stat-value">{{ preview.totalHoursEstimate.toLocaleString() }}h</span>
+        <span class="preview-stat-value">~{{ preview.totalHoursEstimate.toLocaleString() }}h</span>
         <span class="preview-stat-label">Listening Time</span>
       </div>
       <div class="preview-stat">
@@ -20,7 +23,7 @@
       </div>
     </div>
     <div v-if="preview.topArtists.length" class="preview-artists">
-      <p class="preview-artists-label">Top Artists</p>
+      <p class="preview-artists-label">Top Artists (from sample)</p>
       <div class="preview-artist-list">
         <span v-for="artist in preview.topArtists" :key="artist.name" class="preview-artist-tag">
           {{ artist.name }}
@@ -42,6 +45,30 @@ function formatDate(iso: string): string {
 </script>
 
 <style scoped>
+.preview-header {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin-bottom: 1rem;
+}
+
+.preview-header .section-title {
+  margin-bottom: 0;
+}
+
+.preview-estimate-badge {
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--color-text-muted);
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  padding: 0.15rem 0.55rem;
+  align-self: center;
+}
+
 .preview-stats {
   margin-bottom: 1rem;
 }

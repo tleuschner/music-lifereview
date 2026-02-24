@@ -9,8 +9,11 @@ export type WorkerInMessage = {
 export type WorkerOutMessage =
   | { type: 'progress'; stage: 'reading'; fileIndex: number; total: number }
   | { type: 'progress'; stage: 'aggregating' }
-  | { type: 'done'; result: AggregationResult; userHash: string | null }
+  | { type: 'done'; result: AggregationResult; userHash: string | null; skippedEntries: number }
   | { type: 'error'; message: string };
+
+const MAX_FILE_BYTES = 200 * 1024 * 1024; // 200 MB per file
+const MAX_ENTRIES = 5_000_000;            // safety cap — ~10× any real user
 
 async function sha256hex(text: string): Promise<string> {
   const buffer = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text));
@@ -23,10 +26,19 @@ self.onmessage = async (event: MessageEvent<WorkerInMessage>) => {
   const { files } = event.data;
   const allEntries: SpotifyStreamEntry[] = [];
   let userHash: string | null = null;
+  let skippedEntries = 0;
+  let hitCap = false;
 
-  // Read and parse each file
-  for (let i = 0; i < files.length; i++) {
+  outer: for (let i = 0; i < files.length; i++) {
     self.postMessage({ type: 'progress', stage: 'reading', fileIndex: i, total: files.length } satisfies WorkerOutMessage);
+
+    if (files[i].size > MAX_FILE_BYTES) {
+      self.postMessage({
+        type: 'error',
+        message: `${files[i].name} is too large (${(files[i].size / 1024 / 1024).toFixed(0)} MB). Max 200 MB per file.`,
+      } satisfies WorkerOutMessage);
+      return;
+    }
 
     let parsed: unknown;
     try {
@@ -51,21 +63,33 @@ self.onmessage = async (event: MessageEvent<WorkerInMessage>) => {
       }
     }
 
-    // Strip PII and collect entries
     for (const raw of entries) {
-      const entry = { ...raw } as Record<string, unknown>;
+      if (allEntries.length >= MAX_ENTRIES) {
+        hitCap = true;
+        break outer;
+      }
+
+      // Must have a valid timestamp string — without it the entry is useless
+      if (typeof raw.ts !== 'string' || raw.ts.length < 10) {
+        skippedEntries++;
+        continue;
+      }
+
+      // Coerce ms_played to a finite number (null / undefined / NaN → 0)
+      const ms = typeof raw.ms_played === 'number' && isFinite(raw.ms_played) ? raw.ms_played : 0;
+      const entry = { ...raw, ms_played: ms } as Record<string, unknown>;
       for (const field of PII_FIELDS) delete entry[field];
       allEntries.push(entry as unknown as SpotifyStreamEntry);
     }
   }
 
   if (allEntries.length === 0) {
-    self.postMessage({ type: 'error', message: 'No entries found in uploaded files' } satisfies WorkerOutMessage);
+    self.postMessage({ type: 'error', message: 'No valid entries found in the uploaded files.' } satisfies WorkerOutMessage);
     return;
   }
 
-  // Fall back to content fingerprint: earliest 20 entries' ts + track URI
-  if (!userHash && allEntries.length > 0) {
+  // Fall back to content fingerprint when no username was found
+  if (!userHash) {
     const sample = allEntries
       .slice(0, 200)
       .sort((a, b) => (a.ts < b.ts ? -1 : a.ts > b.ts ? 1 : 0))
@@ -74,9 +98,12 @@ self.onmessage = async (event: MessageEvent<WorkerInMessage>) => {
     userHash = await sha256hex(fingerprint);
   }
 
-  // Run aggregation
+  if (hitCap) {
+    console.warn(`[aggregation.worker] Entry cap reached (${MAX_ENTRIES.toLocaleString()}). Oldest entries may be missing.`);
+  }
+
   self.postMessage({ type: 'progress', stage: 'aggregating' } satisfies WorkerOutMessage);
   const result = aggregateEntries(allEntries);
 
-  self.postMessage({ type: 'done', result, userHash } satisfies WorkerOutMessage);
+  self.postMessage({ type: 'done', result, userHash, skippedEntries } satisfies WorkerOutMessage);
 };

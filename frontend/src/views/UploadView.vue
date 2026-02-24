@@ -21,9 +21,14 @@
             <input type="checkbox" v-model="optOut" class="opt-out-check" />
             Don't include my data in community stats
           </label>
-          <button class="info-toggle" type="button" @click="showPrivacy = !showPrivacy" :aria-expanded="showPrivacy">
+          <button
+            class="info-toggle"
+            type="button"
+            @click="showPrivacy = !showPrivacy"
+            :aria-expanded="showPrivacy"
+          >
             How is my data anonymized?
-            <span class="info-caret">{{ showPrivacy ? '▲' : '▼' }}</span>
+            <span class="info-caret">{{ showPrivacy ? "▲" : "▼" }}</span>
           </button>
         </div>
 
@@ -32,34 +37,43 @@
           <ul class="privacy-list">
             <li>
               <span class="tag tag-keep">Kept</span>
-              Track name, artist, album, timestamp, play duration, shuffle &amp; skip flags
+              Track name, artist, album, timestamp, play duration, shuffle &amp;
+              skip flags
             </li>
             <li>
               <span class="tag tag-hash">Hashed</span>
-              Your Spotify username — converted to a one-way SHA-256 hash <em>in your browser</em>
+              Your Spotify username — converted to a one-way SHA-256 hash
+              <em>in your browser</em>
               before upload. The raw value never leaves your device.
             </li>
             <li>
               <span class="tag tag-drop">Dropped</span>
-              IP address, user-agent string, offline timestamp, incognito flag — stripped in your
-              browser before upload.
+              IP address, user-agent string, offline timestamp, incognito flag —
+              stripped in your browser before upload.
             </li>
           </ul>
           <p class="privacy-note">
-            The hash is only used to ensure your most recent upload is the one counted in community
-            statistics. Checking <strong>"Don't include my data"</strong> skips that entirely —
-            your personal dashboard still works normally.
+            The hash is only used to ensure your most recent upload is the one
+            counted in community statistics. Checking
+            <strong>"Don't include my data"</strong> skips that entirely — your
+            personal dashboard still works normally.
           </p>
           <p class="privacy-note">
-            All data is automatically deleted after <strong>30 days</strong>. You can also delete
-            it at any time via your dashboard. See our
-            <RouterLink to="/datenschutz" class="privacy-link">Datenschutzerklärung</RouterLink>
+            All data is automatically deleted after <strong>30 days</strong>.
+            You can also delete it at any time via your dashboard. See our
+            <RouterLink to="/datenschutz" class="privacy-link"
+              >Datenschutzerklärung</RouterLink
+            >
             for full details.
           </p>
         </div>
 
-        <button class="btn btn-primary" :disabled="parsing" @click="startUpload">
-          {{ parsing ? 'Parsing...' : 'Upload & Analyze' }}
+        <button
+          class="btn btn-primary"
+          :disabled="parsing"
+          @click="startUpload"
+        >
+          {{ parsing ? "Parsing..." : "Upload & Analyze" }}
         </button>
       </div>
     </template>
@@ -81,36 +95,52 @@
       </div>
     </template>
 
-    <p v-if="error && uploadState === 'idle'" class="upload-error">{{ error }}</p>
+    <p v-if="error && uploadState === 'idle'" class="upload-error">
+      {{ error }}
+    </p>
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue';
-import { RouterLink } from 'vue-router';
-import { useFileUpload } from '../composables/useFileUpload';
-import { useLocalPreview } from '../composables/useLocalPreview';
-import FileDropZone from '../components/upload/FileDropZone.vue';
-import DataPreview from '../components/upload/DataPreview.vue';
-import UploadProgress from '../components/upload/UploadProgress.vue';
-import ShareLinkCard from '../components/shared/ShareLinkCard.vue';
+import { computed, ref, watch } from "vue";
+import { RouterLink } from "vue-router";
+import { useFileUpload } from "../composables/useFileUpload";
+import { useLocalPreview } from "../composables/useLocalPreview";
+import FileDropZone from "../components/upload/FileDropZone.vue";
+import DataPreview from "../components/upload/DataPreview.vue";
+import UploadProgress from "../components/upload/UploadProgress.vue";
+import ShareLinkCard from "../components/shared/ShareLinkCard.vue";
 
-const { files, uploadState, shareToken, error, optOut, addFiles, removeFile, reset, startUpload } = useFileUpload();
+const {
+  files,
+  uploadState,
+  shareToken,
+  error,
+  optOut,
+  addFiles,
+  removeFile,
+  reset,
+  startUpload,
+} = useFileUpload();
 const { preview, parsing, parseFiles } = useLocalPreview();
 const showPrivacy = ref(false);
 
 const shareUrl = computed(() =>
-  shareToken.value ? `${window.location.origin}/results/${shareToken.value}` : ''
+  shareToken.value ? `${window.location.origin}/share/${shareToken.value}` : "",
 );
 
-function onFilesAdded(newFiles: File[]) {
-  addFiles(newFiles);
+async function onFilesAdded(newFiles: File[]) {
+  await addFiles(newFiles);
 }
 
 // Parse for preview whenever files change
-watch(files, (f) => {
-  if (f.length) parseFiles(f);
-}, { immediate: true });
+watch(
+  files,
+  (f) => {
+    if (f.length) parseFiles(f);
+  },
+  { immediate: true },
+);
 
 function formatSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
@@ -265,9 +295,18 @@ function formatSize(bytes: number): string {
   flex-shrink: 0;
 }
 
-.tag-keep  { background: rgba(29, 185, 84, 0.15); color: #1db954; }
-.tag-hash  { background: rgba(52, 152, 219, 0.15); color: #3498db; }
-.tag-drop  { background: rgba(231, 76,  60, 0.12); color: #e74c3c; }
+.tag-keep {
+  background: rgba(29, 185, 84, 0.15);
+  color: #1db954;
+}
+.tag-hash {
+  background: rgba(52, 152, 219, 0.15);
+  color: #3498db;
+}
+.tag-drop {
+  background: rgba(231, 76, 60, 0.12);
+  color: #e74c3c;
+}
 
 .privacy-note {
   margin: 0;

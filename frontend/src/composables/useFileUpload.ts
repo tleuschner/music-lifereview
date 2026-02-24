@@ -1,4 +1,5 @@
 import { ref } from 'vue';
+import JSZip from 'jszip';
 import { aggregateInWorker, postAggregated, getStatus } from '../services/api';
 import type { StatusResponse } from '@music-livereview/shared';
 
@@ -13,14 +14,39 @@ export function useFileUpload() {
   const optOut = ref(false);
   const readingProgress = ref<{ fileIndex: number; total: number } | null>(null);
 
-  function addFiles(newFiles: File[]) {
-    const jsonFiles = newFiles.filter(f => f.name.endsWith('.json'));
-    if (jsonFiles.length === 0) {
-      error.value = 'Please upload .json files from your Spotify data export.';
+  async function addFiles(newFiles: File[]) {
+    error.value = null;
+    const extracted: File[] = [];
+
+    for (const file of newFiles) {
+      if (file.name.endsWith('.zip')) {
+        try {
+          const zip = await JSZip.loadAsync(file);
+          const audioFiles = Object.values(zip.files).filter(
+            entry => !entry.dir && /Streaming_History_Audio_.*\.json$/.test(entry.name.split('/').pop() ?? ''),
+          );
+          if (audioFiles.length === 0) {
+            error.value = 'No Streaming_History_Audio_*.json files found in the zip.';
+            return;
+          }
+          for (const entry of audioFiles) {
+            const blob = await entry.async('blob');
+            extracted.push(new File([blob], entry.name.split('/').pop()!, { type: 'application/json' }));
+          }
+        } catch {
+          error.value = 'Failed to read zip file.';
+          return;
+        }
+      } else if (file.name.endsWith('.json')) {
+        extracted.push(file);
+      }
+    }
+
+    if (extracted.length === 0) {
+      error.value = 'Please upload your Spotify export zip or JSON files.';
       return;
     }
-    files.value = [...files.value, ...jsonFiles];
-    error.value = null;
+    files.value = [...files.value, ...extracted];
   }
 
   function removeFile(index: number) {

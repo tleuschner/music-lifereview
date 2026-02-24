@@ -27,31 +27,41 @@
       </div>
     </section>
 
-    <section class="how-it-works">
+    <section class="how-it-works card">
       <h2 class="section-title">How It Works</h2>
-      <ol class="steps">
-        <li class="step">
-          <span class="step-num">1</span>
-          <div>
-            <strong>Request your data</strong>
-            <p>Go to Spotify Privacy Settings and request "Extended streaming history." It can take up to 30 days.</p>
-          </div>
-        </li>
-        <li class="step">
-          <span class="step-num">2</span>
-          <div>
-            <strong>Upload the JSON files</strong>
-            <p>Drag and drop the <code>Streaming_History_Audio_*.json</code> files from your download.</p>
-          </div>
-        </li>
-        <li class="step">
-          <span class="step-num">3</span>
-          <div>
-            <strong>Explore your stats</strong>
-            <p>Get an interactive dashboard with charts, heatmaps, and discovery insights — all from your link.</p>
-          </div>
-        </li>
-      </ol>
+      <div class="steps-layout">
+        <ol class="steps">
+          <li class="step">
+            <span class="step-num">1</span>
+            <div>
+              <strong>Request your data from Spotify</strong>
+              <p>
+                Go to
+                <a href="https://www.spotify.com/account/privacy/" target="_blank" rel="noopener" class="step-link">Spotify Privacy Settings</a>
+                and request "Extended streaming history." You'll get a confirmation on the page (see right) and an email with a download link. It can take a few days.
+              </p>
+            </div>
+          </li>
+          <li class="step">
+            <span class="step-num">2</span>
+            <div>
+              <strong>Upload your export</strong>
+              <p>Drop the downloaded <code>.zip</code> directly — or the individual <code>Streaming_History_Audio_*.json</code> files. No extraction needed.</p>
+            </div>
+          </li>
+          <li class="step">
+            <span class="step-num">3</span>
+            <div>
+              <strong>Explore your stats</strong>
+              <p>Get an interactive dashboard with charts, heatmaps, and discovery insights — shareable via a unique link, no account needed.</p>
+            </div>
+          </li>
+        </ol>
+        <div class="step-preview">
+          <img src="/spotify-export-ready.png" alt="Spotify export confirmation screen" class="preview-img" />
+        </div>
+      </div>
+      <RouterLink to="/upload" class="btn btn-primary steps-cta">Get Started</RouterLink>
     </section>
   </div>
 </template>
@@ -108,11 +118,26 @@ import { RouterLink } from 'vue-router';
   line-height: 1.5;
 }
 
+.how-it-works {
+  padding: 2.5rem;
+}
+
+.how-it-works .section-title {
+  margin-bottom: 2rem;
+}
+
+.steps-layout {
+  display: flex;
+  gap: 2.5rem;
+  align-items: flex-start;
+}
+
 .steps {
   list-style: none;
   display: flex;
   flex-direction: column;
-  gap: 1.5rem;
+  gap: 1.75rem;
+  flex: 1;
 }
 
 .step {
@@ -122,8 +147,8 @@ import { RouterLink } from 'vue-router';
 }
 
 .step-num {
-  width: 32px;
-  height: 32px;
+  width: 36px;
+  height: 36px;
   border-radius: 50%;
   background: var(--color-primary);
   color: #000;
@@ -131,24 +156,67 @@ import { RouterLink } from 'vue-router';
   align-items: center;
   justify-content: center;
   font-weight: 700;
-  font-size: 0.875rem;
+  font-size: 0.9rem;
   flex-shrink: 0;
+  margin-top: 0.1rem;
 }
 
 .step strong {
   display: block;
-  margin-bottom: 0.25rem;
+  margin-bottom: 0.35rem;
+  font-size: 1rem;
 }
 
 .step p {
   color: var(--color-text-secondary);
   font-size: 0.9rem;
+  line-height: 1.55;
+}
+
+.step-link {
+  color: var(--color-primary);
+  text-decoration: none;
+}
+
+.step-link:hover {
+  text-decoration: underline;
 }
 
 .step code {
-  background: var(--color-surface);
+  background: var(--color-bg);
   padding: 0.125rem 0.375rem;
   border-radius: 4px;
   font-size: 0.8rem;
+  border: 1px solid var(--color-border);
+}
+
+.step-preview {
+  flex-shrink: 0;
+  width: 240px;
+}
+
+.preview-img {
+  width: 100%;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--color-border);
+  display: block;
+}
+
+.steps-cta {
+  display: inline-block;
+  margin-top: 2rem;
+  text-decoration: none;
+  padding: 0.75rem 1.75rem;
+}
+
+@media (max-width: 640px) {
+  .steps-layout {
+    flex-direction: column;
+  }
+
+  .step-preview {
+    width: 100%;
+    max-width: 280px;
+  }
 }
 </style>

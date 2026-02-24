@@ -9,13 +9,13 @@
   >
     <div class="dropzone-content">
       <div class="dropzone-icon">+</div>
-      <p class="dropzone-text">Drop your Spotify JSON files here</p>
-      <p class="dropzone-hint">or click to browse</p>
+      <p class="dropzone-text">Drop your Spotify export zip here</p>
+      <p class="dropzone-hint">or click to browse &mdash; also accepts individual JSON files</p>
     </div>
     <input
       ref="fileInput"
       type="file"
-      accept=".json"
+      accept=".zip,.json"
       multiple
       hidden
       @change="onFileInput"

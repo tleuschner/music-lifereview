@@ -50,9 +50,12 @@ export function createShareController(useCase: GenerateOgPreview): Router {
         return;
       }
 
+      // Absolute URL for OG meta tags (social crawlers need a full URL).
+      // Relative path for the browser redirect so it works behind any proxy/port.
       const baseUrl = `${req.protocol}://${req.get('host')}`;
       const ogImageUrl = `${baseUrl}/share/${token}/og-image.png`;
       const spaUrl = `${baseUrl}/results/${token}`;
+      const spaPath = `/results/${token}`;
 
       const title = escapeHtml(data.headline);
       const parts = [data.subline];
@@ -86,13 +89,13 @@ export function createShareController(useCase: GenerateOgPreview): Router {
   <meta name="twitter:description" content="${description}">
   <meta name="twitter:image" content="${ogImageUrl}">
 
-  <!-- Redirect humans to the SPA -->
-  <meta http-equiv="refresh" content="0;url=${spaUrl}">
+  <!-- Redirect humans to the SPA (relative path works behind any proxy/port) -->
+  <meta http-equiv="refresh" content="0;url=${spaPath}">
   <link rel="canonical" href="${spaUrl}">
 </head>
 <body>
-  <p>Redirecting to <a href="${spaUrl}">your dashboard</a>…</p>
-  <script>window.location.replace("${spaUrl}");</script>
+  <p>Redirecting to <a href="${spaPath}">your dashboard</a>…</p>
+  <script>window.location.replace("${spaPath}");</script>
 </body>
 </html>`);
     } catch (err) {

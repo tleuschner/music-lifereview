@@ -3,11 +3,11 @@
     <div class="filter-row">
       <div class="filter-group">
         <label class="filter-label">From</label>
-        <input type="month" :value="dateFrom" :min="minMonth" :max="maxMonth" class="filter-input" @input="$emit('update:dateFrom', ($event.target as HTMLInputElement).value || null)" />
+        <input type="month" :value="dateFrom" :min="minMonth" :max="maxMonth" class="filter-input" @click="($event.target as HTMLInputElement).showPicker?.()" @input="$emit('update:dateFrom', ($event.target as HTMLInputElement).value || null)" />
       </div>
       <div class="filter-group">
         <label class="filter-label">To</label>
-        <input type="month" :value="dateTo" :min="minMonth" :max="maxMonth" class="filter-input" @input="$emit('update:dateTo', ($event.target as HTMLInputElement).value || null)" />
+        <input type="month" :value="dateTo" :min="minMonth" :max="maxMonth" class="filter-input" @click="($event.target as HTMLInputElement).showPicker?.()" @input="$emit('update:dateTo', ($event.target as HTMLInputElement).value || null)" />
       </div>
       <div class="filter-group">
         <label class="filter-label">Sort by</label>
@@ -30,6 +30,7 @@
         Reset
       </button>
     </div>
+    <p v-if="dateRangeError" class="filter-error">{{ dateRangeError }}</p>
   </div>
 </template>
 
@@ -42,6 +43,7 @@ defineProps<{
   sortBy: 'hours' | 'count';
   limit: number;
   hasActiveFilters: boolean;
+  dateRangeError?: string | null;
 }>();
 
 defineEmits<{
@@ -80,9 +82,16 @@ defineEmits<{
   padding: 0.5rem 0.75rem;
   color: var(--color-text);
   font-size: 0.875rem;
+  color-scheme: dark;
 }
 
 .filter-reset {
   align-self: flex-end;
+}
+
+.filter-error {
+  margin-top: 0.5rem;
+  font-size: 0.8rem;
+  color: var(--color-error, #f87171);
 }
 </style>

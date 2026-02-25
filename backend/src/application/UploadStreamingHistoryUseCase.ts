@@ -63,8 +63,14 @@ export class UploadStreamingHistoryUseCase implements UploadStreamingHistory {
       await this.sessionRepo.save(session);
 
       // Resolve catalog IDs
+      // Collect artist names from both artistBuckets and trackBuckets to ensure
+      // every track's artist exists in artist_catalog before the FK insert.
+      const allArtistNames = new Set<string>([
+        ...data.artistBuckets.map(b => b.artistName),
+        ...data.trackBuckets.map(b => b.artistName),
+      ]);
       const artistIdMap = await this.entryRepo.upsertArtistCatalog(
-        data.artistBuckets.map(b => ({ artistName: b.artistName })),
+        Array.from(allArtistNames).map(n => ({ artistName: n })),
       );
 
       const uniqueTracks = new Map<string, { trackName: string; artistName: string; albumName: string | null; spotifyTrackUri: string | null }>();

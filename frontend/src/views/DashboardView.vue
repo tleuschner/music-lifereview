@@ -49,6 +49,7 @@
               :sort-by="sortBy"
               :limit="limit"
               :has-active-filters="hasActiveFilters"
+              :date-range-error="dateRangeError"
               @update:date-from="dateFrom = $event"
               @update:date-to="dateTo = $event"
               @update:sort-by="sortBy = $event as 'hours' | 'count'"
@@ -490,6 +491,7 @@ const {
   limit,
   activeFilters,
   hasActiveFilters,
+  dateRangeError,
   resetFilters,
 } = useFilters();
 

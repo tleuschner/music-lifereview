@@ -8,10 +8,18 @@ export function useFilters() {
   const sortBy = ref<"hours" | "count">("count");
   const limit = ref(20);
 
-  // Month picker returns "YYYY-MM"; append "-01" so the backend can cast to a full date
+  const dateRangeError = computed<string | null>(() => {
+    if (dateFrom.value && dateTo.value && dateFrom.value > dateTo.value) {
+      return '"From" must be before "To"';
+    }
+    return null;
+  });
+
+  // Month picker returns "YYYY-MM"; append "-01" so the backend can cast to a full date.
+  // Drop both dates when the range is invalid so no bad request reaches the backend.
   const activeFilters = computed<StatsFilter>(() => ({
-    from: dateFrom.value ? `${dateFrom.value}-01` : undefined,
-    to: dateTo.value ? `${dateTo.value}-01` : undefined,
+    from: !dateRangeError.value && dateFrom.value ? `${dateFrom.value}-01` : undefined,
+    to: !dateRangeError.value && dateTo.value ? `${dateTo.value}-01` : undefined,
     artist: selectedArtist.value ?? undefined,
     sort: sortBy.value,
     limit: limit.value,
@@ -40,6 +48,7 @@ export function useFilters() {
     limit,
     activeFilters,
     hasActiveFilters,
+    dateRangeError,
     resetFilters,
   };
 }

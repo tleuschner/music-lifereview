@@ -15,7 +15,7 @@ music.timleuschner.de {
 }
 
 emotions.timleuschner.de {
-    root * /opt/emotions/dist
+    root * /srv/emotions
     try_files {path} /index.html
     file_server
 }

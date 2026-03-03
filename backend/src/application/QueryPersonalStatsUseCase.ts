@@ -36,6 +36,8 @@ import type { StreamEntryRepository } from '../domain/port/outbound/StreamEntryR
 export class QueryPersonalStatsUseCase implements QueryPersonalStats {
   // Cache token → session ID for 60s to avoid a DB round-trip on every endpoint call
   private readonly sessionIdCache = new Map<string, { id: string; expiresAt: number }>();
+  // Deduplicates concurrent lookups for the same token (e.g. parallel dashboard requests)
+  private readonly sessionIdInflight = new Map<string, Promise<string | null>>();
 
   constructor(
     private readonly sessionRepo: UploadSessionRepository,
@@ -46,11 +48,17 @@ export class QueryPersonalStatsUseCase implements QueryPersonalStats {
     const cached = this.sessionIdCache.get(token);
     if (cached && cached.expiresAt > Date.now()) return cached.id;
 
-    const session = await this.sessionRepo.findByToken(token);
-    if (!session || session.status !== 'completed') return null;
+    const inflight = this.sessionIdInflight.get(token);
+    if (inflight) return inflight;
 
-    this.sessionIdCache.set(token, { id: session.id, expiresAt: Date.now() + 60_000 });
-    return session.id;
+    const promise = this.sessionRepo.findByToken(token).then((session) => {
+      this.sessionIdInflight.delete(token);
+      if (!session || session.status !== 'completed') return null;
+      this.sessionIdCache.set(token, { id: session.id, expiresAt: Date.now() + 60_000 });
+      return session.id;
+    });
+    this.sessionIdInflight.set(token, promise);
+    return promise;
   }
 
   async getOverview(token: string, _filters: StatsFilter): Promise<OverviewResponse | null> {

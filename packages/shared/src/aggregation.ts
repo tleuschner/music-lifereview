@@ -95,6 +95,7 @@ export interface AggregationResult {
 
 export function aggregateEntries(rawEntries: SpotifyStreamEntry[]): AggregationResult {
   const artistMonthly = new Map<string, {
+    artistName: string;
     playCount: number; msPlayed: number; skipCount: number;
     deliberateCount: number; servedCount: number;
     weekdayPlayCount: number; weekendPlayCount: number;
@@ -163,6 +164,7 @@ export function aggregateEntries(rawEntries: SpotifyStreamEntry[]): AggregationR
         else { existing.weekdayPlayCount++; if (skipped) existing.weekdaySkipCount++; }
       } else {
         artistMonthly.set(key, {
+          artistName: e.master_metadata_album_artist_name!,
           playCount: 1, msPlayed: e.ms_played,
           skipCount: skipped ? 1 : 0,
           deliberateCount: isDeliberate ? 1 : 0,
@@ -353,8 +355,8 @@ export function aggregateEntries(rawEntries: SpotifyStreamEntry[]): AggregationR
   // Convert maps to arrays
   const artistBuckets: ClientArtistBucket[] = [];
   for (const [key, val] of artistMonthly) {
-    const [monthStr, artistName] = key.split('|');
-    artistBuckets.push({ month: monthStr, artistName, ...val });
+    const monthStr = key.split('|')[0];
+    artistBuckets.push({ month: monthStr, ...val });
   }
 
   const trackBuckets: ClientTrackBucket[] = [];

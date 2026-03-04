@@ -29,18 +29,22 @@ export function createDatabase(connectionString: string): Knex {
   const WARN_THRESHOLD = 0.8;      // warn at 80% pool usage
 
   setInterval(() => {
-    const numUsed = pool.numUsed();
-    const numFree = pool.numFree();
-    const numPending = pool.numPendingAcquires();
-    const total = numUsed + numFree;
-    const utilization = total > 0 ? numUsed / total : 0;
-    const now = Date.now();
+    try {
+      const numUsed: number = typeof pool.numUsed === 'function' ? pool.numUsed() : 0;
+      const numFree: number = typeof pool.numFree === 'function' ? pool.numFree() : 0;
+      const numPending: number = typeof pool.numPendingAcquires === 'function' ? pool.numPendingAcquires() : 0;
+      const total = numUsed + numFree;
+      const utilization = total > 0 ? numUsed / total : 0;
+      const now = Date.now();
 
-    if ((utilization >= WARN_THRESHOLD || numPending > 0) && now - lastWarningAt > WARN_INTERVAL_MS) {
-      lastWarningAt = now;
-      console.warn(
-        `[pool] HIGH USAGE — used=${numUsed} free=${numFree} pending=${numPending} utilization=${(utilization * 100).toFixed(0)}%`,
-      );
+      if ((utilization >= WARN_THRESHOLD || numPending > 0) && now - lastWarningAt > WARN_INTERVAL_MS) {
+        lastWarningAt = now;
+        console.warn(
+          `[pool] HIGH USAGE — used=${numUsed} free=${numFree} pending=${numPending} utilization=${(utilization * 100).toFixed(0)}%`,
+        );
+      }
+    } catch (e) {
+      // Never let pool monitoring crash the process
     }
   }, 5_000);
 

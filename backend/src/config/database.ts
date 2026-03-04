@@ -28,6 +28,8 @@ export function createDatabase(connectionString: string): Knex {
   const WARN_INTERVAL_MS = 10_000; // throttle warnings to every 10s
   const WARN_THRESHOLD = 0.8;      // warn at 80% pool usage
 
+  // .unref() means this interval won't prevent the process from exiting
+  // (critical: run-migrations.ts also calls createDatabase and must be able to exit)
   setInterval(() => {
     try {
       const numUsed: number = typeof pool.numUsed === 'function' ? pool.numUsed() : 0;
@@ -46,7 +48,7 @@ export function createDatabase(connectionString: string): Knex {
     } catch (e) {
       // Never let pool monitoring crash the process
     }
-  }, 5_000);
+  }, 5_000).unref();
 
   return db;
 }

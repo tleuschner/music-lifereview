@@ -3,6 +3,7 @@ services:
     image: postgres:16-alpine
     restart: unless-stopped
     shm_size: '256mb'
+    command: ["postgres", "-c", "max_connections=200", "-c", "shared_buffers=128MB"]
     environment:
       POSTGRES_DB: music_livereview
       POSTGRES_USER: app
@@ -25,6 +26,11 @@ services:
       CORS_ORIGIN: ${CORS_ORIGIN}
       MAX_FILE_SIZE_MB: ${MAX_FILE_SIZE_MB:-50}
       PORT: 3000
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "200m"  # rotate at 200 MB
+        max-file: "10"    # keep 10 files = 2 GB max on disk
     depends_on:
       postgres:
         condition: service_healthy

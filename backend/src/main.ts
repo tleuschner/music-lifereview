@@ -17,6 +17,7 @@ import { createPersonalStatsController } from "./adapter/inbound/http/PersonalSt
 import { createCommunityStatsController } from "./adapter/inbound/http/CommunityStatsController.js";
 import { createShareController } from "./adapter/inbound/http/ShareController.js";
 import { errorHandler } from "./adapter/inbound/http/middleware/errorHandler.js";
+import { requestLogger } from "./adapter/inbound/http/middleware/requestLogger.js";
 
 const config = loadConfig();
 const db = createDatabase(config.databaseUrl);
@@ -84,6 +85,7 @@ const app = express();
 app.set('trust proxy', 1); // trust Caddy's X-Forwarded-For
 app.use(cors({ origin: config.corsOrigin }));
 app.use(express.json());
+app.use(requestLogger);
 
 // Health check
 app.get("/api/health", (_req, res) => {

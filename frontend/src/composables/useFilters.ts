@@ -17,9 +17,12 @@ export function useFilters() {
 
   // Month picker returns "YYYY-MM"; append "-01" so the backend can cast to a full date.
   // Drop both dates when the range is invalid so no bad request reaches the backend.
+  // Validate format — input events fire while the user is still typing the year
+  // (e.g. "2", "20"), producing partial values that PostgreSQL rejects as dates.
+  const isValidMonth = (v: string | null): v is string => !!v && /^\d{4}-\d{2}$/.test(v);
   const activeFilters = computed<StatsFilter>(() => ({
-    from: !dateRangeError.value && dateFrom.value ? `${dateFrom.value}-01` : undefined,
-    to: !dateRangeError.value && dateTo.value ? `${dateTo.value}-01` : undefined,
+    from: !dateRangeError.value && isValidMonth(dateFrom.value) ? `${dateFrom.value}-01` : undefined,
+    to: !dateRangeError.value && isValidMonth(dateTo.value) ? `${dateTo.value}-01` : undefined,
     artist: selectedArtist.value ?? undefined,
     sort: sortBy.value,
     limit: limit.value,

@@ -152,7 +152,7 @@ export function aggregateEntries(rawEntries: SpotifyStreamEntry[]): AggregationR
     if (!dateTo || ts > dateTo) dateTo = ts;
 
     if (e.master_metadata_album_artist_name) {
-      const key = `${monthStr}|${e.master_metadata_album_artist_name}`;
+      const key = `${monthStr}\0${e.master_metadata_album_artist_name}`;
       const existing = artistMonthly.get(key);
       if (existing) {
         existing.playCount++;
@@ -178,7 +178,7 @@ export function aggregateEntries(rawEntries: SpotifyStreamEntry[]): AggregationR
     }
 
     if (e.master_metadata_track_name && e.master_metadata_album_artist_name) {
-      const key = `${monthStr}|${e.master_metadata_track_name}|${e.master_metadata_album_artist_name}`;
+      const key = `${monthStr}\0${e.master_metadata_track_name}\0${e.master_metadata_album_artist_name}`;
       const existing = trackMonthly.get(key);
       if (existing) {
         existing.playCount++;
@@ -355,13 +355,13 @@ export function aggregateEntries(rawEntries: SpotifyStreamEntry[]): AggregationR
   // Convert maps to arrays
   const artistBuckets: ClientArtistBucket[] = [];
   for (const [key, val] of artistMonthly) {
-    const monthStr = key.split('|')[0];
+    const monthStr = key.split('\0')[0];
     artistBuckets.push({ month: monthStr, ...val });
   }
 
   const trackBuckets: ClientTrackBucket[] = [];
   for (const [key, val] of trackMonthly) {
-    const monthStr = key.split('|')[0];
+    const monthStr = key.split('\0')[0];
     trackBuckets.push({ month: monthStr, ...val });
   }
 

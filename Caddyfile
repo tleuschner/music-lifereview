@@ -19,3 +19,9 @@ emotions.timleuschner.de {
     try_files {path} /index.html
     file_server
 }
+
+jetlag.timleuschner.de {
+    root * /srv/jetlag
+    try_files {path} /index.html
+    file_server
+}

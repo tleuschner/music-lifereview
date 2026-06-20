@@ -46,6 +46,7 @@ services:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - ./frontend/dist:/srv/frontend:ro
       - /opt/emotions/dist:/srv/emotions:ro
+      - /opt/jetlag/dist:/srv/jetlag:ro
       - caddy_data:/data
       - caddy_config:/config
 
